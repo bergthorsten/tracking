@@ -31,11 +31,15 @@ export function MockTrayApp({
   const [tab, setTab] = React.useState("track")
   const [logging, setLogging] = React.useState<Ticket | null>(null)
 
-  const handleLog = (ticket: Ticket, minutes: number, note: string) => {
+  const handleLog = (
+    ticket: Ticket,
+    minutes: number,
+    note: string,
+    date: string
+  ) => {
     setLogging(null)
     toast.success(`Logged ${formatDuration(minutes)} · ${ticket.key}`, {
-      description: note || ticket.title,
-      action: { label: "Undo", onClick: () => {} },
+      description: `${note || ticket.title} · ${date}`,
     })
   }
 

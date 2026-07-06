@@ -36,18 +36,79 @@ export interface JiraWorklogResult {
   logs: JiraWorklog[]
 }
 
+export interface CreateJiraWorklogInput {
+  issueKey: string
+  ticketTitle?: string
+  minutes: number
+  date: string
+  note?: string
+}
+
+export interface AppReminder {
+  id: string
+  time: string
+  days: boolean[]
+  enabled: boolean
+}
+
+export interface FeatureStatus {
+  supported: boolean
+  enabled?: boolean
+  permission?: NotificationPermission | "unsupported"
+  registered?: boolean
+  message?: string
+}
+
+export interface AppSettings {
+  remindersEnabled: boolean
+  notificationsEnabled: boolean
+  reminders: AppReminder[]
+  launchAtLogin: boolean
+  globalShortcut: string
+  cacheTtlMinutes: number
+  updatedAt: string
+  native: {
+    launchAtLogin: FeatureStatus
+    notifications: FeatureStatus
+    globalShortcut: FeatureStatus
+  }
+}
+
+export type AppSettingsInput = Omit<AppSettings, "native">
+
+export interface ShortcutResult {
+  shortcut: string
+  status: FeatureStatus
+}
+
 export interface DesktopBindings {
   loadJiraSettings(): Promise<SavedJiraSettings | null>
   saveJiraSettings(settings: JiraSettingsInput): Promise<SavedJiraSettings>
+  disconnectJira(): Promise<void>
+  loadAppSettings(): Promise<AppSettings>
+  saveAppSettings(settings: AppSettingsInput): Promise<AppSettings>
+  getLaunchAtLogin(): Promise<FeatureStatus>
+  setLaunchAtLogin(enabled: boolean): Promise<FeatureStatus>
+  getNotificationStatus(): Promise<FeatureStatus>
+  requestNotificationPermission(): Promise<FeatureStatus>
+  getShortcut(): Promise<ShortcutResult>
+  setShortcut(shortcut: string): Promise<ShortcutResult>
   loadJiraProfile(): Promise<SavedJiraSettings>
   loadJiraIssues(query?: string): Promise<JiraTicket[]>
   loadJiraWorklogs(month?: string): Promise<JiraWorklogResult>
+  createJiraWorklog(input: CreateJiraWorklogInput): Promise<JiraWorklog>
+  refreshJiraData(): Promise<void>
 }
 
 const jiraSettingsEndpoint = "/api/jira-settings"
+const appSettingsEndpoint = "/api/app-settings"
 const jiraProfileEndpoint = "/api/jira-profile"
 const jiraIssuesEndpoint = "/api/jira-issues"
 const jiraWorklogsEndpoint = "/api/jira-worklogs"
+const jiraRefreshEndpoint = "/api/jira-refresh"
+const launchAtLoginEndpoint = "/api/launch-at-login"
+const notificationsEndpoint = "/api/notifications"
+const shortcutEndpoint = "/api/shortcut"
 
 const httpDesktopBindings: DesktopBindings = {
   loadJiraSettings: () =>
@@ -57,6 +118,33 @@ const httpDesktopBindings: DesktopBindings = {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(settings),
+    }),
+  disconnectJira: () =>
+    requestDesktop<void>(jiraSettingsEndpoint, { method: "DELETE" }),
+  loadAppSettings: () => requestDesktop<AppSettings>(appSettingsEndpoint),
+  saveAppSettings: (settings) =>
+    requestDesktop<AppSettings>(appSettingsEndpoint, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(settings),
+    }),
+  getLaunchAtLogin: () => requestDesktop<FeatureStatus>(launchAtLoginEndpoint),
+  setLaunchAtLogin: (enabled) =>
+    requestDesktop<FeatureStatus>(launchAtLoginEndpoint, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    }),
+  getNotificationStatus: () =>
+    requestDesktop<FeatureStatus>(notificationsEndpoint),
+  requestNotificationPermission: () =>
+    requestDesktop<FeatureStatus>(notificationsEndpoint, { method: "POST" }),
+  getShortcut: () => requestDesktop<ShortcutResult>(shortcutEndpoint),
+  setShortcut: (shortcut) =>
+    requestDesktop<ShortcutResult>(shortcutEndpoint, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ shortcut }),
     }),
   loadJiraProfile: () => requestDesktop<SavedJiraSettings>(jiraProfileEndpoint),
   loadJiraIssues: (query) => {
@@ -81,6 +169,14 @@ const httpDesktopBindings: DesktopBindings = {
       params.size ? `${jiraWorklogsEndpoint}?${params}` : jiraWorklogsEndpoint
     )
   },
+  createJiraWorklog: (input) =>
+    requestDesktop<JiraWorklog>(jiraWorklogsEndpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  refreshJiraData: () =>
+    requestDesktop<void>(jiraRefreshEndpoint, { method: "POST" }),
 }
 
 async function requestDesktop<T>(

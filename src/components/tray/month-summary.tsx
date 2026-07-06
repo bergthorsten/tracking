@@ -30,7 +30,7 @@ const MONTH_OPTIONS = Array.from({ length: 6 }, (_, index) => {
  * Footer summary: tracked time for the selected month with a target
  * progress bar. The month is switchable to review previous months.
  */
-export function MonthSummary() {
+export function MonthSummary({ refreshKey = 0 }: { refreshKey?: number }) {
   const [month, setMonth] = React.useState(MONTH_OPTIONS[0]?.value)
   const [liveTotal, setLiveTotal] = React.useState<number | null>(null)
   const desktopBindings = React.useMemo(() => getDesktopBindings(), [])
@@ -60,7 +60,7 @@ export function MonthSummary() {
     return () => {
       cancelled = true
     }
-  }, [desktopBindings, month])
+  }, [desktopBindings, month, refreshKey])
 
   return (
     <div className="border-t bg-card/40 px-3 py-2.5">

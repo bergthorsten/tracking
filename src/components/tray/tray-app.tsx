@@ -1,5 +1,5 @@
 import * as React from "react"
-import { ListChecks, Settings, Timer } from "lucide-react"
+import { ListChecks, RefreshCw, Settings, Timer } from "lucide-react"
 import { toast } from "sonner"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -29,10 +29,16 @@ export function TrayApp({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const [tab, setTab] = React.useState("track")
   const [logging, setLogging] = React.useState<Ticket | null>(null)
   const [user, setUser] = React.useState<CurrentUser | null>(null)
+  const [refreshKey, setRefreshKey] = React.useState(0)
+  const [submittingWorklog, setSubmittingWorklog] = React.useState(false)
+  const [refreshing, setRefreshing] = React.useState(false)
+  const [lastRefreshedAt, setLastRefreshedAt] = React.useState<Date | null>(
+    null
+  )
+  const desktopBindings = React.useMemo(() => getDesktopBindings(), [])
 
   React.useEffect(() => {
     let cancelled = false
-    const desktopBindings = getDesktopBindings()
 
     if (!desktopBindings) {
       return
@@ -50,14 +56,71 @@ export function TrayApp({ onOpenSettings }: { onOpenSettings?: () => void }) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [desktopBindings])
 
-  const handleLog = (ticket: Ticket, minutes: number, note: string) => {
-    setLogging(null)
-    toast.success(`Logged ${formatDuration(minutes)} · ${ticket.key}`, {
-      description: note || ticket.title,
-      action: { label: "Undo", onClick: () => {} },
-    })
+  const handleLog = async (
+    ticket: Ticket,
+    minutes: number,
+    note: string,
+    date: string
+  ) => {
+    if (!desktopBindings) {
+      toast.error("Worklog was not created", {
+        description: "Desktop Jira integration is unavailable.",
+      })
+      return
+    }
+
+    setSubmittingWorklog(true)
+
+    try {
+      const worklog = await desktopBindings.createJiraWorklog({
+        issueKey: ticket.key,
+        ticketTitle: ticket.title,
+        minutes,
+        date,
+        note,
+      })
+
+      toast.success("Worklog created", {
+        description: `${formatDuration(worklog.minutes)} · ${worklog.ticketKey}`,
+      })
+      setLogging(null)
+      React.startTransition(() => {
+        setRefreshKey((key) => key + 1)
+      })
+    } catch (error) {
+      toast.error("Worklog was not created", {
+        description:
+          error instanceof Error ? error.message : "Could not create worklog.",
+      })
+    } finally {
+      setSubmittingWorklog(false)
+    }
+  }
+
+  const refreshJiraData = async () => {
+    if (!desktopBindings || refreshing) {
+      return
+    }
+
+    setRefreshing(true)
+
+    try {
+      await desktopBindings.refreshJiraData()
+      setLastRefreshedAt(new Date())
+      React.startTransition(() => {
+        setRefreshKey((key) => key + 1)
+      })
+      toast.success("Jira data refreshed")
+    } catch (error) {
+      toast.error("Could not refresh Jira data", {
+        description:
+          error instanceof Error ? error.message : "Try again in a moment.",
+      })
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   return (
@@ -65,6 +128,23 @@ export function TrayApp({ onOpenSettings }: { onOpenSettings?: () => void }) {
       {/* Header */}
       <header className="flex items-center gap-2.5 border-b px-3 py-2.5">
         {user ? <UserHeader user={user} /> : <HeaderSkeleton />}
+        {lastRefreshedAt ? (
+          <span className="text-[10px] whitespace-nowrap text-muted-foreground">
+            {lastRefreshedAt.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+        ) : null}
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Refresh Jira data"
+          disabled={refreshing || !desktopBindings}
+          onClick={() => void refreshJiraData()}
+        >
+          <RefreshCw className={refreshing ? "animate-spin" : undefined} />
+        </Button>
         <Button
           size="icon-sm"
           variant="ghost"
@@ -98,13 +178,13 @@ export function TrayApp({ onOpenSettings }: { onOpenSettings?: () => void }) {
           value="track"
           className="flex min-h-0 flex-1 flex-col data-[hidden]:hidden"
         >
-          <TrackView onOpenTicket={setLogging} />
+          <TrackView onOpenTicket={setLogging} refreshKey={refreshKey} />
         </TabsContent>
         <TabsContent
           value="worklog"
           className="flex min-h-0 flex-1 flex-col data-[hidden]:hidden"
         >
-          <WorklogView />
+          <WorklogView refreshKey={refreshKey} />
         </TabsContent>
       </Tabs>
 
@@ -115,6 +195,7 @@ export function TrayApp({ onOpenSettings }: { onOpenSettings?: () => void }) {
           loggedToday={logging.todayMinutes}
           onClose={() => setLogging(null)}
           onLog={handleLog}
+          submitting={submittingWorklog}
         />
       ) : null}
     </div>

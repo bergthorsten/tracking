@@ -25,7 +25,7 @@ function groupByDay(logs: WorkLog[]) {
  * two-line rows keep it calm — title + duration up top, "key · time · note"
  * underneath, with edit/delete revealed on hover.
  */
-export function WorklogView() {
+export function WorklogView({ refreshKey = 0 }: { refreshKey?: number }) {
   const desktopBindings = React.useMemo(() => getDesktopBindings(), [])
   const [logs, setLogs] = React.useState<WorkLog[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -64,7 +64,7 @@ export function WorklogView() {
     return () => {
       cancelled = true
     }
-  }, [desktopBindings])
+  }, [desktopBindings, refreshKey])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

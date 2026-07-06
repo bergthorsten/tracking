@@ -1,59 +1,62 @@
-import * as React from "react"
 import { Bell, Plus, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import type { AppReminder, FeatureStatus } from "@/desktop-bindings"
 import { cn } from "@/lib/utils"
 
 const DAYS = ["M", "T", "W", "T", "F", "S", "S"] as const
 
-type Reminder = {
-  id: string
-  time: string
-  days: boolean[]
+export function NotificationSettings({
+  enabled,
+  remindersEnabled,
+  reminders,
+  notificationStatus,
+  saving,
+  onToggleNotifications,
+  onToggleReminders,
+  onChangeReminders,
+}: {
   enabled: boolean
-}
+  remindersEnabled: boolean
+  reminders: AppReminder[]
+  notificationStatus?: FeatureStatus
+  saving?: boolean
+  onToggleNotifications: (enabled: boolean) => void
+  onToggleReminders: (enabled: boolean) => void
+  onChangeReminders: (reminders: AppReminder[]) => void
+}) {
+  const supported = notificationStatus?.supported !== false
+  const active = enabled && supported
+  const controlsEnabled = active && remindersEnabled && !saving
+  const subtitle = !supported
+    ? notificationStatus?.message || "Native notifications are unavailable"
+    : notificationStatus?.permission === "denied"
+      ? "Notifications are denied in system settings"
+      : enabled
+        ? "Native notifications are enabled"
+        : "Enable native notifications for reminders"
 
-const defaultReminders: Reminder[] = [
-  { id: "r1", time: "11:30", days: [true, true, true, true, true, false, false], enabled: true },
-  { id: "r2", time: "16:45", days: [true, true, true, true, true, false, false], enabled: true },
-]
-
-/**
- * Configurable reminder system — up to 2 notifications per day, each with a
- * time and a weekday pattern. Backed by the OS Notification API at runtime.
- */
-export function NotificationSettings() {
-  const [master, setMaster] = React.useState(true)
-  const [reminders, setReminders] = React.useState<Reminder[]>(defaultReminders)
-
-  const update = (id: string, patch: Partial<Reminder>) =>
-    setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
-
-  const toggleDay = (id: string, i: number) =>
-    setReminders((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, days: r.days.map((d, di) => (di === i ? !d : d)) }
-          : r
+  const updateReminder = (id: string, next: Partial<AppReminder>) => {
+    onChangeReminders(
+      reminders.map((reminder) =>
+        reminder.id === id ? { ...reminder, ...next } : reminder
       )
     )
+  }
 
-  const addReminder = () =>
-    setReminders((prev) =>
-      prev.length >= 2
-        ? prev
-        : [
-            ...prev,
-            {
-              id: crypto.randomUUID(),
-              time: "13:00",
-              days: [true, true, true, true, true, false, false],
-              enabled: true,
-            },
-          ]
-    )
+  const addReminder = () => {
+    onChangeReminders([
+      ...reminders,
+      {
+        id: `r${Date.now().toString(36)}`,
+        time: "16:45",
+        days: [true, true, true, true, true, false, false],
+        enabled: true,
+      },
+    ])
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -62,18 +65,41 @@ export function NotificationSettings() {
           <Bell className="size-4 text-muted-foreground" />
           <div>
             <p className="text-sm font-medium">Reminders</p>
-            <p className="text-xs text-muted-foreground">
-              Nudge me to log time · up to 2 per day
-            </p>
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
           </div>
         </div>
-        <Switch checked={master} onCheckedChange={setMaster} />
+        <div className="flex items-center gap-2">
+          {notificationStatus?.permission ? (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {notificationStatus.permission}
+            </span>
+          ) : null}
+          <Switch
+            checked={enabled}
+            disabled={!supported || saving}
+            onCheckedChange={onToggleNotifications}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between rounded-lg border bg-card/40 p-2.5">
+        <div>
+          <p className="text-sm font-medium">Scheduled reminders</p>
+          <p className="text-xs text-muted-foreground">
+            Fire at selected local times
+          </p>
+        </div>
+        <Switch
+          checked={remindersEnabled}
+          disabled={!active || saving}
+          onCheckedChange={onToggleReminders}
+        />
       </div>
 
       <div
         className={cn(
           "flex flex-col gap-2 transition-opacity",
-          !master && "pointer-events-none opacity-40"
+          !controlsEnabled && "pointer-events-none opacity-45"
         )}
       >
         {reminders.map((r) => (
@@ -85,22 +111,29 @@ export function NotificationSettings() {
               <Input
                 type="time"
                 value={r.time}
-                onChange={(e) => update(r.id, { time: e.target.value })}
+                disabled={!controlsEnabled}
+                onChange={(event) =>
+                  updateReminder(r.id, { time: event.currentTarget.value })
+                }
                 className="h-7 w-24 font-mono text-sm"
               />
               <div className="flex-1" />
               <Switch
                 size="sm"
                 checked={r.enabled}
-                onCheckedChange={(v) => update(r.id, { enabled: v })}
+                disabled={!controlsEnabled}
+                onCheckedChange={(enabled) => updateReminder(r.id, { enabled })}
               />
               <Button
                 size="icon-xs"
                 variant="ghost"
                 aria-label="Remove reminder"
                 className="text-muted-foreground hover:text-destructive"
+                disabled={!controlsEnabled || reminders.length <= 1}
                 onClick={() =>
-                  setReminders((prev) => prev.filter((x) => x.id !== r.id))
+                  onChangeReminders(
+                    reminders.filter((reminder) => reminder.id !== r.id)
+                  )
                 }
               >
                 <Trash2 />
@@ -111,7 +144,12 @@ export function NotificationSettings() {
                 <button
                   key={i}
                   type="button"
-                  onClick={() => toggleDay(r.id, i)}
+                  disabled={!controlsEnabled}
+                  onClick={() => {
+                    const days = [...r.days]
+                    days[i] = !days[i]
+                    updateReminder(r.id, { days })
+                  }}
                   className={cn(
                     "flex size-6 items-center justify-center rounded-md text-[11px] font-medium transition-colors",
                     r.days[i]
@@ -126,15 +164,15 @@ export function NotificationSettings() {
           </div>
         ))}
 
-        {reminders.length < 2 ? (
-          <Button variant="outline" size="sm" onClick={addReminder}>
-            <Plus /> Add reminder
-          </Button>
-        ) : (
-          <p className="px-0.5 text-[11px] text-muted-foreground">
-            Maximum of 2 reminders reached.
-          </p>
-        )}
+        <Button
+          size="xs"
+          variant="outline"
+          disabled={!controlsEnabled || reminders.length >= 8}
+          onClick={addReminder}
+          className="self-start"
+        >
+          <Plus /> Add reminder
+        </Button>
       </div>
     </div>
   )

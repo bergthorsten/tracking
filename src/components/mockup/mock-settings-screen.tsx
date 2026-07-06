@@ -11,6 +11,21 @@ import { useTheme } from "@/components/theme-provider"
 import { MOCK_USER } from "@/data/mock"
 import { cn } from "@/lib/utils"
 
+const MOCK_REMINDERS = [
+  {
+    id: "r1",
+    time: "11:30",
+    days: [true, true, true, true, true, false, false],
+    enabled: true,
+  },
+  {
+    id: "r2",
+    time: "16:45",
+    days: [true, true, true, true, true, false, false],
+    enabled: true,
+  },
+]
+
 export function MockSettingsScreen({ onBack }: { onBack?: () => void }) {
   return (
     <div className="flex h-full flex-col bg-background">
@@ -45,7 +60,13 @@ export function MockSettingsScreen({ onBack }: { onBack?: () => void }) {
                   Connected · {MOCK_USER.host}
                 </span>
               </div>
-              <Button size="sm" variant="ghost" className="text-destructive">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive"
+                disabled
+                title="Disconnect is not implemented yet."
+              >
                 <LogOut /> Disconnect
               </Button>
             </div>
@@ -54,7 +75,15 @@ export function MockSettingsScreen({ onBack }: { onBack?: () => void }) {
           <Separator />
 
           <section>
-            <NotificationSettings />
+            <NotificationSettings
+              enabled={false}
+              remindersEnabled
+              reminders={MOCK_REMINDERS}
+              notificationStatus={{ supported: true, permission: "default" }}
+              onToggleNotifications={() => {}}
+              onToggleReminders={() => {}}
+              onChangeReminders={() => {}}
+            />
           </section>
 
           <Separator />
@@ -65,9 +94,9 @@ export function MockSettingsScreen({ onBack }: { onBack?: () => void }) {
             <Row
               icon={<Rocket className="size-4 text-muted-foreground" />}
               title="Launch at login"
-              subtitle="Start quietly in the menu bar"
+              subtitle="Not available yet"
             >
-              <Switch defaultChecked />
+              <Switch checked={false} disabled />
             </Row>
           </section>
 

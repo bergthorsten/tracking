@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import type { JiraSettingsInput } from "@/desktop-bindings"
+import { getDesktopBindings, type JiraSettingsInput } from "@/desktop-bindings"
 import { cn } from "@/lib/utils"
 
 type Status = "idle" | "testing" | "connected"
@@ -60,6 +60,15 @@ export function OnboardingScreen({ onDone, onConnect }: OnboardingScreenProps) {
     }
   }
 
+  const openApiTokenLink = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!getDesktopBindings()) {
+      return
+    }
+
+    event.preventDefault()
+    window.open(event.currentTarget.href, "_blank", "noopener,noreferrer")
+  }
+
   return (
     <div className="flex h-full flex-col justify-center bg-background px-6 py-8">
       {/* Brand */}
@@ -105,6 +114,9 @@ export function OnboardingScreen({ onDone, onConnect }: OnboardingScreenProps) {
           hint={
             <a
               href="https://id.atlassian.com/manage-profile/security/api-tokens"
+              target="_blank"
+              rel="noreferrer"
+              onClick={openApiTokenLink}
               className="inline-flex items-center gap-0.5 text-primary hover:underline"
             >
               Create one <ExternalLink className="size-3" />

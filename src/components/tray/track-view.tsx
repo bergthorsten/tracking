@@ -17,8 +17,10 @@ import { getDesktopBindings } from "@/desktop-bindings"
  */
 export function TrackView({
   onOpenTicket,
+  refreshKey = 0,
 }: {
   onOpenTicket: (ticket: Ticket) => void
+  refreshKey?: number
 }) {
   const [query, setQuery] = React.useState("")
   const [recentTickets, setRecentTickets] = React.useState<Ticket[]>([])
@@ -76,7 +78,7 @@ export function TrackView({
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [deferredQuery, desktopBindings])
+  }, [deferredQuery, desktopBindings, refreshKey])
 
   const results = searchResults
   const list = searching ? results : recentTickets
@@ -146,7 +148,7 @@ export function TrackView({
         </div>
       </ScrollArea>
 
-      <MonthSummary />
+      <MonthSummary refreshKey={refreshKey} />
     </div>
   )
 }

@@ -1,7 +1,17 @@
 import * as React from "react"
-import { ChevronLeft, LogOut, Monitor, Moon, Rocket, Sun } from "lucide-react"
+import {
+  ChevronLeft,
+  Keyboard,
+  LogOut,
+  Monitor,
+  Moon,
+  Rocket,
+  Sun,
+} from "lucide-react"
+import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
@@ -9,7 +19,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { NotificationSettings } from "@/components/settings/notification-settings"
 import { useTheme } from "@/components/theme-provider"
-import { getDesktopBindings, type SavedJiraSettings } from "@/desktop-bindings"
+import {
+  getDesktopBindings,
+  type AppReminder,
+  type AppSettings,
+  type AppSettingsInput,
+  type SavedJiraSettings,
+} from "@/desktop-bindings"
 import { cn } from "@/lib/utils"
 
 type ConnectionUser = {
@@ -20,8 +36,17 @@ type ConnectionUser = {
 }
 
 /** Settings surface: connection, reminders, and preferences. */
-export function SettingsScreen({ onBack }: { onBack?: () => void }) {
+export function SettingsScreen({
+  onBack,
+  onDisconnected,
+}: {
+  onBack?: () => void
+  onDisconnected?: () => void
+}) {
   const [user, setUser] = React.useState<ConnectionUser | null>(null)
+  const [appSettings, setAppSettings] = React.useState<AppSettings | null>(null)
+  const [saving, setSaving] = React.useState(false)
+  const [disconnecting, setDisconnecting] = React.useState(false)
 
   React.useEffect(() => {
     let cancelled = false
@@ -40,10 +65,137 @@ export function SettingsScreen({ onBack }: { onBack?: () => void }) {
         }
       })
 
+    void desktopBindings.loadAppSettings().then((settings) => {
+      if (!cancelled) {
+        setAppSettings(settings)
+      }
+    })
+
     return () => {
       cancelled = true
     }
   }, [])
+
+  const saveAppSettings = async (next: AppSettingsInput) => {
+    const desktopBindings = getDesktopBindings()
+
+    if (!desktopBindings) {
+      setAppSettings((current) => (current ? { ...current, ...next } : current))
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const saved = await desktopBindings.saveAppSettings(next)
+      setAppSettings(saved)
+    } catch (error) {
+      toast.error("Settings were not saved", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const updateAppSettings = (patch: Partial<AppSettingsInput>) => {
+    if (!appSettings) {
+      return
+    }
+
+    void saveAppSettings({
+      remindersEnabled: appSettings.remindersEnabled,
+      notificationsEnabled: appSettings.notificationsEnabled,
+      reminders: appSettings.reminders,
+      launchAtLogin: appSettings.launchAtLogin,
+      globalShortcut: appSettings.globalShortcut,
+      cacheTtlMinutes: appSettings.cacheTtlMinutes,
+      updatedAt: appSettings.updatedAt,
+      ...patch,
+    })
+  }
+
+  const toggleNotifications = async (enabled: boolean) => {
+    const desktopBindings = getDesktopBindings()
+
+    if (enabled && desktopBindings) {
+      setSaving(true)
+
+      try {
+        const status = await desktopBindings.requestNotificationPermission()
+
+        if (status.permission !== "granted") {
+          toast.error("Notifications are not enabled", {
+            description:
+              status.message || "Allow notifications in system settings.",
+          })
+          return
+        }
+
+        updateAppSettings({ notificationsEnabled: true })
+      } catch (error) {
+        toast.error("Notifications are not enabled", {
+          description: error instanceof Error ? error.message : String(error),
+        })
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+
+    updateAppSettings({ notificationsEnabled: false })
+  }
+
+  const toggleLaunchAtLogin = async (enabled: boolean) => {
+    const desktopBindings = getDesktopBindings()
+
+    if (!desktopBindings) {
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const status = await desktopBindings.setLaunchAtLogin(enabled)
+      setAppSettings((current) =>
+        current
+          ? {
+              ...current,
+              launchAtLogin: status.enabled === true,
+              native: { ...current.native, launchAtLogin: status },
+            }
+          : current
+      )
+    } catch (error) {
+      toast.error("Launch at login was not updated", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const disconnect = async () => {
+    const desktopBindings = getDesktopBindings()
+
+    if (!desktopBindings) {
+      return
+    }
+
+    setDisconnecting(true)
+
+    try {
+      await desktopBindings.disconnectJira()
+      toast.success("Jira disconnected")
+      onDisconnected?.()
+    } catch (error) {
+      toast.error("Jira was not disconnected", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setDisconnecting(false)
+    }
+  }
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -65,7 +217,15 @@ export function SettingsScreen({ onBack }: { onBack?: () => void }) {
           <section className="flex flex-col gap-2">
             <SectionTitle>Jira connection</SectionTitle>
             <div className="flex items-center gap-2.5 rounded-lg border bg-card/40 p-2.5">
-              {user ? <ConnectionCard user={user} /> : <ConnectionSkeleton />}
+              {user ? (
+                <ConnectionCard
+                  user={user}
+                  disconnecting={disconnecting}
+                  onDisconnect={disconnect}
+                />
+              ) : (
+                <ConnectionSkeleton />
+              )}
             </div>
           </section>
 
@@ -73,7 +233,24 @@ export function SettingsScreen({ onBack }: { onBack?: () => void }) {
 
           {/* Reminders */}
           <section>
-            <NotificationSettings />
+            {appSettings ? (
+              <NotificationSettings
+                enabled={appSettings.notificationsEnabled}
+                remindersEnabled={appSettings.remindersEnabled}
+                reminders={appSettings.reminders}
+                notificationStatus={appSettings.native.notifications}
+                saving={saving}
+                onToggleNotifications={toggleNotifications}
+                onToggleReminders={(remindersEnabled) =>
+                  updateAppSettings({ remindersEnabled })
+                }
+                onChangeReminders={(reminders: AppReminder[]) =>
+                  updateAppSettings({ reminders })
+                }
+              />
+            ) : (
+              <ConnectionSkeleton />
+            )}
           </section>
 
           <Separator />
@@ -87,9 +264,36 @@ export function SettingsScreen({ onBack }: { onBack?: () => void }) {
             <Row
               icon={<Rocket className="size-4 text-muted-foreground" />}
               title="Launch at login"
-              subtitle="Start quietly in the menu bar"
+              subtitle={
+                appSettings?.native.launchAtLogin.supported === false
+                  ? appSettings.native.launchAtLogin.message
+                  : "Open automatically after signing in"
+              }
             >
-              <Switch defaultChecked />
+              <Switch
+                checked={appSettings?.native.launchAtLogin.enabled === true}
+                disabled={
+                  saving ||
+                  appSettings?.native.launchAtLogin.supported === false
+                }
+                onCheckedChange={toggleLaunchAtLogin}
+              />
+            </Row>
+
+            <Row
+              icon={<Keyboard className="size-4 text-muted-foreground" />}
+              title="Global shortcut"
+              subtitle={
+                appSettings?.native.globalShortcut.message ||
+                "Show or hide Jira Tracking"
+              }
+            >
+              <Input
+                value={appSettings?.globalShortcut ?? "CmdOrCtrl+Shift+J"}
+                disabled
+                className="h-7 w-36 font-mono text-xs"
+                aria-label="Global shortcut"
+              />
             </Row>
           </section>
 
@@ -102,7 +306,15 @@ export function SettingsScreen({ onBack }: { onBack?: () => void }) {
   )
 }
 
-function ConnectionCard({ user }: { user: ConnectionUser }) {
+function ConnectionCard({
+  user,
+  disconnecting,
+  onDisconnect,
+}: {
+  user: ConnectionUser
+  disconnecting?: boolean
+  onDisconnect: () => void
+}) {
   return (
     <>
       <Avatar className="size-8">
@@ -118,7 +330,13 @@ function ConnectionCard({ user }: { user: ConnectionUser }) {
           Connected · {user.host}
         </span>
       </div>
-      <Button size="sm" variant="ghost" className="text-destructive">
+      <Button
+        size="sm"
+        variant="ghost"
+        className="text-destructive"
+        disabled={disconnecting}
+        onClick={onDisconnect}
+      >
         <LogOut /> Disconnect
       </Button>
     </>

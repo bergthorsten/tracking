@@ -10,6 +10,29 @@ import { cn } from "@/lib/utils"
 
 const PRESETS = [15, 30, 45, 60, 120]
 
+function localDateInputValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+
+  return `${year}-${month}-${day}`
+}
+
+function isValidDateInput(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false
+  }
+
+  const [year, month, day] = value.split("-").map(Number)
+  const date = new Date(year, month - 1, day)
+
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  )
+}
+
 /**
  * Full-cover, in-popover sheet for logging time against one ticket.
  * Stays inside the 400px window, unlike a viewport-fixed dialog.
@@ -20,20 +43,30 @@ export function LogTimeSheet({
   todaysEntries = [],
   onClose,
   onLog,
+  submitting = false,
+  submitDisabledReason,
 }: {
   ticket: Ticket
   loggedToday: number
   todaysEntries?: WorkLog[]
   onClose: () => void
-  onLog: (ticket: Ticket, minutes: number, note: string) => void
+  onLog: (
+    ticket: Ticket,
+    minutes: number,
+    note: string,
+    date: string
+  ) => void | Promise<void>
+  submitting?: boolean
+  submitDisabledReason?: string
 }) {
   const [minutes, setMinutes] = React.useState(STEP_MINUTES)
   const [note, setNote] = React.useState("")
-  const [date, setDate] = React.useState(() =>
-    new Date().toISOString().slice(0, 10)
-  )
+  const [date, setDate] = React.useState(() => localDateInputValue(new Date()))
 
   const meta = projectMetaFor(ticket.project)
+  const dateIsValid = isValidDateInput(date)
+  const canSubmit =
+    minutes > 0 && dateIsValid && !submitDisabledReason && !submitting
 
   const bump = (d: number) =>
     setMinutes((m) => Math.min(8 * 60, Math.max(0, m + d)))
@@ -43,8 +76,8 @@ export function LogTimeSheet({
       className="absolute inset-0 z-50 flex animate-in flex-col bg-background duration-150 fade-in-0 slide-in-from-bottom-3"
       onKeyDown={(e) => {
         if (e.key === "Escape") onClose()
-        if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && minutes > 0)
-          onLog(ticket, minutes, note)
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSubmit)
+          void onLog(ticket, minutes, note, date)
       }}
     >
       {/* header */}
@@ -137,9 +170,13 @@ export function LogTimeSheet({
                 type="date"
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
+                aria-invalid={!dateIsValid}
                 className="h-7 w-[8.5rem] border-0 bg-transparent px-0 text-right font-mono text-xs shadow-none focus-visible:ring-0"
               />
             </div>
+            {!dateIsValid ? (
+              <p className="text-xs text-destructive">Select a valid date.</p>
+            ) : null}
           </div>
 
           {/* already logged today */}
@@ -190,11 +227,17 @@ export function LogTimeSheet({
         <Button
           size="lg"
           className="w-full"
-          disabled={minutes <= 0}
-          onClick={() => onLog(ticket, minutes, note)}
+          disabled={!canSubmit}
+          onClick={() => void onLog(ticket, minutes, note, date)}
         >
-          <Check /> Log {formatDuration(minutes)}
+          <Check />{" "}
+          {submitting ? "Logging..." : `Log ${formatDuration(minutes)}`}
         </Button>
+        {submitDisabledReason ? (
+          <p className="mt-2 text-center text-xs text-muted-foreground">
+            {submitDisabledReason}
+          </p>
+        ) : null}
       </div>
     </div>
   )

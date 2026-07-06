@@ -68,7 +68,10 @@ function DesktopPanelApp() {
         <TrayApp onOpenSettings={() => setScreen("settings")} />
       ) : null}
       {screen === "settings" ? (
-        <SettingsScreen onBack={() => setScreen("tray")} />
+        <SettingsScreen
+          onBack={() => setScreen("tray")}
+          onDisconnected={() => setScreen("onboarding")}
+        />
       ) : null}
       <Toaster position="bottom-center" />
     </div>
