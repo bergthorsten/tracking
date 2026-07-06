@@ -1,20 +1,13 @@
 import * as React from "react"
-import { Pencil, Trash2 } from "lucide-react"
-import { toast } from "sonner"
 
-import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Skeleton } from "@/components/ui/skeleton"
 import { SectionLabel } from "@/components/tray/section-label"
-import {
-  PROJECT_META,
-  SEARCHABLE_TICKETS,
-  WORK_LOGS,
-  type WorkLog,
-} from "@/data/mock"
+import { projectMetaFor, type WorkLog } from "@/data/domain"
+import { getDesktopBindings } from "@/desktop-bindings"
 import { formatDuration, formatTimeOfDay, relativeDayLabel } from "@/lib/time"
 
-const projectOf = (key: string) =>
-  SEARCHABLE_TICKETS.find((t) => t.key === key)?.project ?? "PLAT"
+const projectOf = (key: string) => key.split("-")[0] || "JIRA"
 
 function groupByDay(logs: WorkLog[]) {
   const map = new Map<string, WorkLog[]>()
@@ -33,52 +26,87 @@ function groupByDay(logs: WorkLog[]) {
  * underneath, with edit/delete revealed on hover.
  */
 export function WorklogView() {
-  const [logs, setLogs] = React.useState(WORK_LOGS)
+  const desktopBindings = React.useMemo(() => getDesktopBindings(), [])
+  const [logs, setLogs] = React.useState<WorkLog[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
   const groups = React.useMemo(() => groupByDay(logs), [logs])
 
-  const remove = (log: WorkLog) => {
-    setLogs((prev) => prev.filter((l) => l.id !== log.id))
-    toast(`Deleted ${formatDuration(log.minutes)} · ${log.ticketKey}`, {
-      action: {
-        label: "Undo",
-        onClick: () => setLogs((prev) => [log, ...prev]),
-      },
-    })
-  }
+  React.useEffect(() => {
+    if (!desktopBindings) {
+      return
+    }
+
+    let cancelled = false
+
+    void desktopBindings
+      .loadJiraWorklogs()
+      .then((result) => {
+        if (!cancelled) {
+          setLogs(result.logs)
+        }
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) {
+          setError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Could not load Jira worklogs."
+          )
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [desktopBindings])
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ScrollArea className="min-h-0 flex-1">
         <div className="px-1.5 pb-3">
-          {groups.map(([day, dayLogs]) => {
-            const dayTotal = dayLogs.reduce((s, l) => s + l.minutes, 0)
-            return (
-              <div key={day}>
-                <SectionLabel right={formatDuration(dayTotal)}>
-                  {day}
-                </SectionLabel>
-                <div className="flex flex-col">
-                  {dayLogs.map((log) => (
-                    <WorklogRow key={log.id} log={log} onDelete={remove} />
-                  ))}
-                </div>
-              </div>
-            )
-          })}
+          {error ? (
+            <StatusState title="Could not load worklogs" detail={error} />
+          ) : null}
+          {!error && loading ? <WorklogSkeleton /> : null}
+          {!error && !loading && groups.length === 0 ? (
+            <StatusState
+              title="No tracking times found"
+              detail="Jira has no worklogs by you for this month."
+            />
+          ) : null}
+          {!error && !loading
+            ? groups.map(([day, dayLogs]) => {
+                const dayTotal = dayLogs.reduce((s, l) => s + l.minutes, 0)
+                return (
+                  <div key={day}>
+                    <SectionLabel right={formatDuration(dayTotal)}>
+                      {day}
+                    </SectionLabel>
+                    <div className="flex flex-col">
+                      {dayLogs.map((log) => (
+                        <WorklogRow key={log.id} log={log} />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })
+            : null}
         </div>
       </ScrollArea>
     </div>
   )
 }
 
-function WorklogRow({
-  log,
-  onDelete,
-}: {
-  log: WorkLog
-  onDelete: (log: WorkLog) => void
-}) {
-  const meta = PROJECT_META[projectOf(log.ticketKey)]
+function WorklogRow({ log }: { log: WorkLog }) {
+  const project = projectOf(log.ticketKey)
+  const meta = projectMetaFor(project)
+
   return (
     <div className="group/log flex flex-col gap-0.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-muted/70">
       {/* line 1: title + duration */}
@@ -111,28 +139,33 @@ function WorklogRow({
             <span className="truncate">{log.description}</span>
           </>
         ) : null}
-
-        {/* hover actions, pinned right */}
-        <div className="ml-auto flex shrink-0 items-center opacity-0 transition-opacity group-hover/log:opacity-100 focus-within:opacity-100">
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Edit worklog"
-            onClick={() => toast("Edit worklog (mock)")}
-          >
-            <Pencil />
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label="Delete worklog"
-            className="text-muted-foreground hover:text-destructive"
-            onClick={() => onDelete(log)}
-          >
-            <Trash2 />
-          </Button>
-        </div>
       </div>
+    </div>
+  )
+}
+
+function StatusState({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1.5 px-6 py-10 text-center">
+      <p className="text-sm font-medium">{title}</p>
+      <p className="text-xs text-muted-foreground">{detail}</p>
+    </div>
+  )
+}
+
+function WorklogSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 px-2 pt-4">
+      <Skeleton className="mb-1 h-3 w-24" />
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="flex flex-col gap-2 rounded-lg px-1 py-2">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-3.5 flex-1" />
+            <Skeleton className="h-3.5 w-10" />
+          </div>
+          <Skeleton className="h-3 w-3/5" />
+        </div>
+      ))}
     </div>
   )
 }

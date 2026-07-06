@@ -1,6 +1,29 @@
-# React + TypeScript + Vite + shadcn/ui
+# Tracking
 
-This is a template for a new Vite project with React, TypeScript, and shadcn/ui.
+React, TypeScript, Vite, shadcn/ui, and Deno Desktop.
+
+## Desktop app
+
+Install Deno 2.9 or newer, then run the tray/menu-bar app in development mode:
+
+```bash
+deno task desktop:dev
+```
+
+Package the current production build into a desktop app:
+
+```bash
+deno task desktop:package
+```
+
+Equivalent npm scripts are also available:
+
+```bash
+npm run desktop:dev
+npm run desktop:package
+```
+
+The Desktop entry hides the startup window, hides the macOS dock icon, and attaches the app UI as a tray/menu-bar panel.
 
 ## Adding components
 

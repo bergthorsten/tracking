@@ -1,0 +1,22 @@
+{
+  "name": "tracking",
+  "version": "0.0.1",
+  "exports": "./desktop/main.ts",
+  "tasks": {
+    "desktop": "npm run build && deno desktop --allow-env=HOME,USERPROFILE,APPDATA,LOCALAPPDATA,XDG_CONFIG_HOME,DENO_SERVE_ADDRESS --allow-read --allow-write --allow-net --include dist --exclude node_modules desktop/main.ts",
+    "desktop:dev": "npm run build && deno desktop --hmr --allow-env=HOME,USERPROFILE,APPDATA,LOCALAPPDATA,XDG_CONFIG_HOME,DENO_SERVE_ADDRESS --allow-read --allow-write --allow-net --include dist --exclude node_modules desktop/main.ts --show-panel",
+    "desktop:package": "npm run build && deno desktop --allow-env=HOME,USERPROFILE,APPDATA,LOCALAPPDATA,XDG_CONFIG_HOME,DENO_SERVE_ADDRESS --allow-read --allow-write --allow-net --include dist --exclude node_modules desktop/main.ts"
+  },
+  "desktop": {
+    "app": {
+      "name": "Jira-Tracking",
+      "identifier": "de.bergfreunde.jira-tracking"
+    },
+    "backend": "webview",
+    "output": {
+      "macos": "./dist-desktop/Jira-Tracking.app",
+      "windows": "./dist-desktop/Jira-Tracking",
+      "linux": "./dist-desktop/tracking.AppImage"
+    }
+  }
+}

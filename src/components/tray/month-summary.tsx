@@ -9,12 +9,21 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
-import { MONTH_TOTALS, MONTHLY_TARGET_MINUTES } from "@/data/mock"
+import { Skeleton } from "@/components/ui/skeleton"
+import { MONTHLY_TARGET_MINUTES } from "@/data/domain"
+import { getDesktopBindings } from "@/desktop-bindings"
 import { formatDuration, monthLabel } from "@/lib/time"
 
-const MONTH_OPTIONS = Object.keys(MONTH_TOTALS).map((k) => {
-  const [y, m] = k.split("-").map(Number)
-  return { value: k, label: monthLabel(y, m) }
+const MONTH_OPTIONS = Array.from({ length: 6 }, (_, index) => {
+  const date = new Date()
+  date.setMonth(date.getMonth() - index, 1)
+  const year = date.getFullYear()
+  const month = date.getMonth()
+
+  return {
+    value: `${year}-${String(month + 1).padStart(2, "0")}`,
+    label: monthLabel(year, month),
+  }
 })
 
 /**
@@ -23,13 +32,50 @@ const MONTH_OPTIONS = Object.keys(MONTH_TOTALS).map((k) => {
  */
 export function MonthSummary() {
   const [month, setMonth] = React.useState(MONTH_OPTIONS[0]?.value)
-  const total = MONTH_TOTALS[month] ?? 0
+  const [liveTotal, setLiveTotal] = React.useState<number | null>(null)
+  const desktopBindings = React.useMemo(() => getDesktopBindings(), [])
+  const total = liveTotal ?? 0
   const pct = Math.min(100, Math.round((total / MONTHLY_TARGET_MINUTES) * 100))
+
+  React.useEffect(() => {
+    if (!desktopBindings || !month) {
+      return
+    }
+
+    let cancelled = false
+
+    void desktopBindings
+      .loadJiraWorklogs(month)
+      .then((result) => {
+        if (!cancelled) {
+          setLiveTotal(result.totalMinutes)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLiveTotal(null)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [desktopBindings, month])
 
   return (
     <div className="border-t bg-card/40 px-3 py-2.5">
       <div className="flex items-center justify-between">
-        <Select value={month} onValueChange={(v) => v && setMonth(v)}>
+        <Select
+          value={month}
+          onValueChange={(v) => {
+            if (!v) {
+              return
+            }
+
+            setLiveTotal(null)
+            setMonth(v)
+          }}
+        >
           <SelectTrigger
             size="sm"
             className="h-7 gap-1.5 border-0 bg-transparent px-1.5 font-medium hover:bg-muted"
@@ -47,12 +93,18 @@ export function MonthSummary() {
         </Select>
 
         <div className="text-right">
-          <span className="font-mono text-sm font-semibold tabular-nums">
-            {formatDuration(total)}
-          </span>
-          <span className="ml-1 text-xs text-muted-foreground">
-            / {MONTHLY_TARGET_MINUTES / 60}h
-          </span>
+          {liveTotal === null ? (
+            <Skeleton className="ml-auto h-4 w-16" />
+          ) : (
+            <>
+              <span className="font-mono text-sm font-semibold tabular-nums">
+                {formatDuration(total)}
+              </span>
+              <span className="ml-1 text-xs text-muted-foreground">
+                / {MONTHLY_TARGET_MINUTES / 60}h
+              </span>
+            </>
+          )}
         </div>
       </div>
 

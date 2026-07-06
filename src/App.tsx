@@ -3,20 +3,101 @@ import * as React from "react"
 import { Toaster } from "@/components/ui/sonner"
 import { Button } from "@/components/ui/button"
 import { DeviceFrame } from "@/components/mockup/device-frame"
+import { MockSettingsScreen } from "@/components/mockup/mock-settings-screen"
+import { MockTrayApp } from "@/components/mockup/mock-tray-app"
 import { TrayApp } from "@/components/tray/tray-app"
 import { SettingsScreen } from "@/components/settings/settings-screen"
 import { OnboardingScreen } from "@/components/onboarding/onboarding-screen"
+import { getDesktopBindings, type JiraSettingsInput } from "@/desktop-bindings"
 
 type Screen = "tray" | "settings"
+type DesktopPanelScreen = Screen | "loading" | "onboarding"
+
+function DesktopPanelApp() {
+  const [screen, setScreen] = React.useState<DesktopPanelScreen>(() =>
+    getDesktopBindings() ? "loading" : "onboarding"
+  )
+
+  React.useEffect(() => {
+    let cancelled = false
+    const desktopBindings = getDesktopBindings()
+
+    if (!desktopBindings) {
+      return
+    }
+
+    void desktopBindings
+      .loadJiraSettings()
+      .then((settings) => {
+        if (!cancelled) {
+          setScreen(settings ? "tray" : "onboarding")
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setScreen("onboarding")
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const connectJira = async (settings: JiraSettingsInput) => {
+    const desktopBindings = getDesktopBindings()
+
+    if (!desktopBindings) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1100))
+      return
+    }
+
+    await desktopBindings.saveJiraSettings(settings)
+  }
+
+  return (
+    <div className="h-svh overflow-hidden bg-background text-foreground">
+      {screen === "loading" ? <DesktopLoadingScreen /> : null}
+      {screen === "onboarding" ? (
+        <OnboardingScreen
+          onConnect={connectJira}
+          onDone={() => setScreen("tray")}
+        />
+      ) : null}
+      {screen === "tray" ? (
+        <TrayApp onOpenSettings={() => setScreen("settings")} />
+      ) : null}
+      {screen === "settings" ? (
+        <SettingsScreen onBack={() => setScreen("tray")} />
+      ) : null}
+      <Toaster position="bottom-center" />
+    </div>
+  )
+}
+
+function DesktopLoadingScreen() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 bg-background px-6 text-center">
+      <div className="size-8 rounded-xl bg-primary/10" />
+      <p className="text-sm font-medium">Loading Jira settings...</p>
+      <p className="text-xs text-muted-foreground">
+        Checking whether this device has already been connected.
+      </p>
+    </div>
+  )
+}
 
 /**
  * Mockup gallery. The left card is a fully interactive prototype (Track ↔
  * Worklog ↔ Settings, quick-add toasts, month switch). The right rail shows
- * the onboarding flow. This App is only for design review — the real Deno
- * Desktop entry point will mount <TrayApp /> / <OnboardingScreen /> directly.
+ * the onboarding flow. The /panel route is the real Deno Desktop tray panel.
  */
 export function App() {
   const [screen, setScreen] = React.useState<Screen>("tray")
+
+  if (window.location.pathname === "/panel" || getDesktopBindings()) {
+    return <DesktopPanelApp />
+  }
 
   return (
     <div className="min-h-svh bg-[radial-gradient(var(--color-border)_1px,transparent_1px)] [background-size:22px_22px]">
@@ -59,9 +140,9 @@ export function App() {
             </div>
             <DeviceFrame label="Interactive prototype">
               {screen === "tray" ? (
-                <TrayApp onOpenSettings={() => setScreen("settings")} />
+                <MockTrayApp onOpenSettings={() => setScreen("settings")} />
               ) : (
-                <SettingsScreen onBack={() => setScreen("tray")} />
+                <MockSettingsScreen onBack={() => setScreen("tray")} />
               )}
             </DeviceFrame>
           </div>

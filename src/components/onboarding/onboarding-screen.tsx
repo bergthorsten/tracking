@@ -12,27 +12,52 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import type { JiraSettingsInput } from "@/desktop-bindings"
 import { cn } from "@/lib/utils"
 
 type Status = "idle" | "testing" | "connected"
+type OnboardingScreenProps = {
+  onDone?: () => void
+  onConnect?: (settings: JiraSettingsInput) => Promise<void> | void
+}
 
 /**
  * First-launch onboarding. Three fields — host (preconfigured), email, and
  * API token — with a single "Connect" action that verifies the credentials.
  */
-export function OnboardingScreen({ onDone }: { onDone?: () => void }) {
+export function OnboardingScreen({ onDone, onConnect }: OnboardingScreenProps) {
   const [host, setHost] = React.useState("stjornborg.atlassian.net")
   const [email, setEmail] = React.useState("")
   const [token, setToken] = React.useState("")
   const [reveal, setReveal] = React.useState(false)
   const [status, setStatus] = React.useState<Status>("idle")
+  const [error, setError] = React.useState<string | null>(null)
 
   const canConnect = email.includes("@") && token.length > 8 && host.length > 3
 
-  const connect = () => {
+  const connect = async () => {
+    if (!canConnect || status !== "idle") {
+      return
+    }
+
     setStatus("testing")
-    setTimeout(() => setStatus("connected"), 1100)
-    setTimeout(() => onDone?.(), 2000)
+    setError(null)
+
+    try {
+      if (onConnect) {
+        await onConnect({ host, email, token })
+      } else {
+        await new Promise((resolve) => window.setTimeout(resolve, 1100))
+      }
+
+      setStatus("connected")
+      window.setTimeout(() => onDone?.(), 700)
+    } catch (error) {
+      setStatus("idle")
+      setError(
+        error instanceof Error ? error.message : "Could not connect to Jira."
+      )
+    }
   }
 
   return (
@@ -55,7 +80,9 @@ export function OnboardingScreen({ onDone }: { onDone?: () => void }) {
       <div className="flex flex-col gap-3.5">
         <Field label="Jira site">
           <div className="flex items-center rounded-lg border border-input bg-muted/40 focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
-            <span className="pl-2.5 text-sm text-muted-foreground">https://</span>
+            <span className="pl-2.5 text-sm text-muted-foreground">
+              https://
+            </span>
             <Input
               value={host}
               onChange={(e) => setHost(e.target.value)}
@@ -106,6 +133,15 @@ export function OnboardingScreen({ onDone }: { onDone?: () => void }) {
         </Field>
       </div>
 
+      {error ? (
+        <p
+          role="alert"
+          className="mt-4 rounded-lg border border-destructive/25 bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          {error}
+        </p>
+      ) : null}
+
       {/* Action */}
       <Button
         size="lg"
@@ -115,7 +151,7 @@ export function OnboardingScreen({ onDone }: { onDone?: () => void }) {
             "bg-emerald-600 text-white hover:bg-emerald-600/90"
         )}
         disabled={!canConnect || status !== "idle"}
-        onClick={connect}
+        onClick={() => void connect()}
       >
         {status === "idle" && (
           <>
@@ -135,7 +171,7 @@ export function OnboardingScreen({ onDone }: { onDone?: () => void }) {
       </Button>
 
       <p className="mt-3 text-center text-[11px] text-muted-foreground">
-        Stored securely in your OS keychain · never synced
+        Stored locally on this device · never synced
       </p>
     </div>
   )

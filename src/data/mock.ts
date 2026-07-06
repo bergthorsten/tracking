@@ -1,38 +1,10 @@
-/**
- * Mock domain data for the UI mockups.
- * Replace with real Jira API data when wiring up the Deno backend.
- */
-
-export type ProjectKey = "PLAT" | "WEB" | "APP" | "OPS" | "DESIGN"
-
-export type Ticket = {
-  key: string
-  title: string
-  project: ProjectKey
-  /** Minutes already logged today against this ticket. */
-  todayMinutes: number
-  /** ISO timestamp of the last worklog against this ticket. */
-  lastWorked: string
-}
-
-export type WorkLog = {
-  id: string
-  ticketKey: string
-  ticketTitle: string
-  minutes: number
-  /** ISO datetime the work was logged for. */
-  startedAt: string
-  description?: string
-}
-
-/** Tailwind chart tokens keyed by project, used for the ticket key chips. */
-export const PROJECT_META: Record<ProjectKey, { name: string; tint: string }> = {
-  PLAT: { name: "Platform", tint: "var(--chart-1)" },
-  WEB: { name: "Website", tint: "var(--chart-2)" },
-  APP: { name: "Mobile App", tint: "var(--chart-3)" },
-  OPS: { name: "Operations", tint: "var(--chart-4)" },
-  DESIGN: { name: "Design System", tint: "var(--chart-5)" },
-}
+import type { Ticket, WorkLog } from "@/data/domain"
+export type { ProjectKey, Ticket, WorkLog } from "@/data/domain"
+export {
+  DAILY_TARGET_MINUTES,
+  MONTHLY_TARGET_MINUTES,
+  PROJECT_META,
+} from "@/data/domain"
 
 const iso = (dayOffset: number, h: number, m = 0) => {
   const d = new Date()
@@ -174,9 +146,6 @@ export const MONTH_TOTALS: Record<string, number> = {
   "2026-5": 9660, // June
   "2026-4": 10230, // May
 }
-
-export const DAILY_TARGET_MINUTES = 8 * 60
-export const MONTHLY_TARGET_MINUTES = 160 * 60
 
 export const MOCK_USER = {
   name: "Alex Rún",

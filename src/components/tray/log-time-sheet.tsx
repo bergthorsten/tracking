@@ -4,37 +4,26 @@ import { Check, Minus, Plus, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { PROJECT_META, WORK_LOGS, type Ticket } from "@/data/mock"
-import {
-  formatDuration,
-  formatTimeOfDay,
-  STEP_MINUTES,
-} from "@/lib/time"
+import { projectMetaFor, type Ticket, type WorkLog } from "@/data/domain"
+import { formatDuration, formatTimeOfDay, STEP_MINUTES } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
 const PRESETS = [15, 30, 45, 60, 120]
 
-function isToday(iso: string) {
-  const d = new Date(iso)
-  const n = new Date()
-  return (
-    d.getFullYear() === n.getFullYear() &&
-    d.getMonth() === n.getMonth() &&
-    d.getDate() === n.getDate()
-  )
-}
-
 /**
  * Full-cover, in-popover sheet for logging time against one ticket.
- * Stays inside the 400px window (unlike a viewport-fixed dialog), so it works
- * identically in the mockup and the real menu-bar app.
+ * Stays inside the 400px window, unlike a viewport-fixed dialog.
  */
 export function LogTimeSheet({
   ticket,
+  loggedToday,
+  todaysEntries = [],
   onClose,
   onLog,
 }: {
   ticket: Ticket
+  loggedToday: number
+  todaysEntries?: WorkLog[]
   onClose: () => void
   onLog: (ticket: Ticket, minutes: number, note: string) => void
 }) {
@@ -44,18 +33,14 @@ export function LogTimeSheet({
     new Date().toISOString().slice(0, 10)
   )
 
-  const meta = PROJECT_META[ticket.project]
-  const todaysEntries = WORK_LOGS.filter(
-    (l) => l.ticketKey === ticket.key && isToday(l.startedAt)
-  )
-  const loggedToday = todaysEntries.reduce((s, l) => s + l.minutes, 0)
+  const meta = projectMetaFor(ticket.project)
 
   const bump = (d: number) =>
     setMinutes((m) => Math.min(8 * 60, Math.max(0, m + d)))
 
   return (
     <div
-      className="absolute inset-0 z-50 flex flex-col bg-background duration-150 animate-in fade-in-0 slide-in-from-bottom-3"
+      className="absolute inset-0 z-50 flex animate-in flex-col bg-background duration-150 fade-in-0 slide-in-from-bottom-3"
       onKeyDown={(e) => {
         if (e.key === "Escape") onClose()
         if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && minutes > 0)
@@ -64,7 +49,12 @@ export function LogTimeSheet({
     >
       {/* header */}
       <header className="flex items-center gap-1.5 border-b px-2 py-2.5">
-        <Button size="icon-sm" variant="ghost" aria-label="Close" onClick={onClose}>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label="Close"
+          onClick={onClose}
+        >
           <X />
         </Button>
         <h2 className="text-sm font-semibold">Log time</h2>
@@ -83,7 +73,7 @@ export function LogTimeSheet({
               <p className="font-mono text-[11px] font-medium tracking-tight text-muted-foreground">
                 {ticket.key} · {meta.name}
               </p>
-              <p className="text-sm font-medium leading-snug">{ticket.title}</p>
+              <p className="text-sm leading-snug font-medium">{ticket.title}</p>
             </div>
           </div>
 
@@ -164,7 +154,9 @@ export function LogTimeSheet({
             </div>
             {todaysEntries.length === 0 ? (
               <p className="rounded-lg border border-dashed px-3 py-2.5 text-center text-xs text-muted-foreground">
-                Nothing logged on this ticket today yet.
+                {loggedToday > 0
+                  ? "Detailed Jira worklog rows will appear in the Worklog tab."
+                  : "Nothing logged on this ticket today yet."}
               </p>
             ) : (
               <div className="overflow-hidden rounded-lg border">

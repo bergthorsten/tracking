@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react"
 
-import { PROJECT_META, type Ticket } from "@/data/mock"
+import { projectMetaFor, type Ticket } from "@/data/domain"
 import { formatDuration, relativeTime } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
@@ -19,7 +19,8 @@ export function TicketRow({
   onOpen: (ticket: Ticket) => void
   className?: string
 }) {
-  const meta = PROJECT_META[ticket.project]
+  const meta = projectMetaFor(ticket.project)
+
   return (
     <button
       type="button"

@@ -1,50 +1,17 @@
-import * as React from "react"
+import type { ReactNode } from "react"
 import { ChevronLeft, LogOut, Monitor, Moon, Rocket, Sun } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { NotificationSettings } from "@/components/settings/notification-settings"
 import { useTheme } from "@/components/theme-provider"
-import { getDesktopBindings, type SavedJiraSettings } from "@/desktop-bindings"
+import { MOCK_USER } from "@/data/mock"
 import { cn } from "@/lib/utils"
 
-type ConnectionUser = {
-  email: string
-  host: string
-  initials: string
-  avatarUrl?: string
-}
-
-/** Settings surface: connection, reminders, and preferences. */
-export function SettingsScreen({ onBack }: { onBack?: () => void }) {
-  const [user, setUser] = React.useState<ConnectionUser | null>(null)
-
-  React.useEffect(() => {
-    let cancelled = false
-    const desktopBindings = getDesktopBindings()
-
-    if (!desktopBindings) {
-      return
-    }
-
-    void desktopBindings
-      .loadJiraProfile()
-      .catch(() => desktopBindings.loadJiraSettings())
-      .then((settings) => {
-        if (!cancelled && settings) {
-          setUser(connectionUserFromSettings(settings))
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
+export function MockSettingsScreen({ onBack }: { onBack?: () => void }) {
   return (
     <div className="flex h-full flex-col bg-background">
       <header className="flex items-center gap-1.5 border-b px-2 py-2.5">
@@ -61,29 +28,40 @@ export function SettingsScreen({ onBack }: { onBack?: () => void }) {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-4 p-3">
-          {/* Connection */}
           <section className="flex flex-col gap-2">
             <SectionTitle>Jira connection</SectionTitle>
             <div className="flex items-center gap-2.5 rounded-lg border bg-card/40 p-2.5">
-              {user ? <ConnectionCard user={user} /> : <ConnectionSkeleton />}
+              <Avatar className="size-8">
+                <AvatarFallback className="bg-primary text-[11px] font-semibold text-primary-foreground">
+                  {MOCK_USER.initials}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-medium">
+                  {MOCK_USER.email}
+                </span>
+                <span className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                  <span className="size-1.5 rounded-full bg-emerald-500" />
+                  Connected · {MOCK_USER.host}
+                </span>
+              </div>
+              <Button size="sm" variant="ghost" className="text-destructive">
+                <LogOut /> Disconnect
+              </Button>
             </div>
           </section>
 
           <Separator />
 
-          {/* Reminders */}
           <section>
             <NotificationSettings />
           </section>
 
           <Separator />
 
-          {/* Preferences */}
           <section className="flex flex-col gap-3">
             <SectionTitle>Preferences</SectionTitle>
-
             <ThemeRow />
-
             <Row
               icon={<Rocket className="size-4 text-muted-foreground" />}
               title="Launch at login"
@@ -102,63 +80,6 @@ export function SettingsScreen({ onBack }: { onBack?: () => void }) {
   )
 }
 
-function ConnectionCard({ user }: { user: ConnectionUser }) {
-  return (
-    <>
-      <Avatar className="size-8">
-        {user.avatarUrl ? <AvatarImage src={user.avatarUrl} alt="" /> : null}
-        <AvatarFallback className="bg-primary text-[11px] font-semibold text-primary-foreground">
-          {user.initials}
-        </AvatarFallback>
-      </Avatar>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm font-medium">{user.email}</span>
-        <span className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
-          <span className="size-1.5 rounded-full bg-emerald-500" />
-          Connected · {user.host}
-        </span>
-      </div>
-      <Button size="sm" variant="ghost" className="text-destructive">
-        <LogOut /> Disconnect
-      </Button>
-    </>
-  )
-}
-
-function ConnectionSkeleton() {
-  return (
-    <>
-      <Skeleton className="size-8 rounded-full" />
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <Skeleton className="h-3.5 w-36" />
-        <Skeleton className="h-2.5 w-44" />
-      </div>
-      <Skeleton className="h-8 w-20" />
-    </>
-  )
-}
-
-function connectionUserFromSettings(
-  settings: SavedJiraSettings
-): ConnectionUser {
-  const name = settings.displayName || settings.email
-
-  return {
-    email: settings.email,
-    host: settings.host,
-    initials: initialsFromName(name),
-    avatarUrl: settings.avatarUrl,
-  }
-}
-
-function initialsFromName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  const initials =
-    parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : name.slice(0, 2)
-
-  return initials.toUpperCase()
-}
-
 function ThemeRow() {
   const { theme, setTheme } = useTheme()
   const options = [
@@ -166,6 +87,7 @@ function ThemeRow() {
     { value: "dark", icon: Moon },
     { value: "system", icon: Monitor },
   ] as const
+
   return (
     <Row title="Appearance" subtitle="Match your workflow">
       <div className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
@@ -196,10 +118,10 @@ function Row({
   subtitle,
   children,
 }: {
-  icon?: React.ReactNode
+  icon?: ReactNode
   title: string
   subtitle?: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
@@ -217,7 +139,7 @@ function Row({
   )
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function SectionTitle({ children }: { children: ReactNode }) {
   return (
     <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
       {children}
