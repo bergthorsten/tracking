@@ -10,9 +10,9 @@ import {
 import {
   defaultAppSettings,
   isRecord,
-  isStoredAppSettings,
   normalizeAppSettingsUpdate,
   normalizeGlobalShortcut,
+  parseStoredAppSettings,
   type AppReminder,
   type StoredAppSettings,
 } from "../src/domain/app-settings.ts"
@@ -349,9 +349,7 @@ async function readStoredAppSettings(): Promise<StoredAppSettings> {
   try {
     const settings = JSON.parse(await Deno.readTextFile(appSettingsPath))
 
-    return isStoredAppSettings(settings)
-      ? { ...defaultAppSettings, ...settings }
-      : defaultAppSettings
+    return parseStoredAppSettings(settings) ?? defaultAppSettings
   } catch (error) {
     if (error instanceof Deno.errors.NotFound || error instanceof SyntaxError) {
       return defaultAppSettings

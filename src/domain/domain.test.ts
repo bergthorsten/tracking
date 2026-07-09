@@ -4,6 +4,7 @@ import {
   defaultAppSettings,
   normalizeAppSettings,
   normalizeAppSettingsUpdate,
+  parseStoredAppSettings,
   type AppReminder,
 } from "./app-settings"
 import {
@@ -264,6 +265,23 @@ describe("normalizeAppSettings", () => {
       remindersEnabled: current.remindersEnabled,
       updatedAt: now.toISOString(),
     })
+  })
+
+  it("rejects invalid persisted reminder times while parsing stored settings", () => {
+    expect(
+      parseStoredAppSettings({
+        ...defaultAppSettings,
+        reminders: [{ ...defaultAppSettings.reminders[0], time: "99:99" }],
+      })
+    ).toBeNull()
+  })
+
+  it("preserves valid persisted updatedAt values", () => {
+    const updatedAt = "2026-07-06T12:00:00.000Z"
+
+    expect(
+      parseStoredAppSettings({ ...defaultAppSettings, updatedAt })?.updatedAt
+    ).toBe(updatedAt)
   })
 })
 

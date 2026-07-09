@@ -46,19 +46,6 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-export function isReminder(value: unknown): value is AppReminder {
-  return (
-    isRecord(value) &&
-    typeof value.id === "string" &&
-    typeof value.time === "string" &&
-    /^\d{2}:\d{2}$/.test(value.time) &&
-    Array.isArray(value.days) &&
-    value.days.length === 7 &&
-    value.days.every((day) => typeof day === "boolean") &&
-    typeof value.enabled === "boolean"
-  )
-}
-
 export function normalizeReminder(
   value: unknown,
   fallbackId: string
@@ -156,16 +143,29 @@ export function normalizeAppSettingsUpdate(
   return normalizeAppSettings({ ...current, ...patch }, now)
 }
 
-export function isStoredAppSettings(value: unknown): value is StoredAppSettings {
-  return (
-    isRecord(value) &&
-    typeof value.remindersEnabled === "boolean" &&
-    typeof value.notificationsEnabled === "boolean" &&
-    Array.isArray(value.reminders) &&
-    value.reminders.every(isReminder) &&
-    typeof value.launchAtLogin === "boolean" &&
-    typeof value.globalShortcut === "string" &&
-    typeof value.cacheTtlMinutes === "number" &&
-    typeof value.updatedAt === "string"
-  )
+export function parseStoredAppSettings(value: unknown): StoredAppSettings | null {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const updatedAt = parseSettingsUpdatedAt(value.updatedAt)
+
+  try {
+    return normalizeAppSettings(
+      { ...defaultAppSettings, ...value },
+      updatedAt ?? new Date()
+    )
+  } catch {
+    return null
+  }
+}
+
+function parseSettingsUpdatedAt(value: unknown) {
+  if (typeof value !== "string") {
+    return null
+  }
+
+  const date = new Date(value)
+
+  return Number.isNaN(date.getTime()) ? null : date
 }
