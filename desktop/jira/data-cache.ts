@@ -3,6 +3,7 @@ import type {
   JiraWorklogResult,
   SavedJiraSettings,
 } from "../../src/contracts/desktop-api.ts"
+import { yearMonthKey } from "../../src/domain/year-month.ts"
 import { TtlCache } from "../../src/shared/cache.ts"
 
 type JiraCacheValue = SavedJiraSettings | JiraTicket[] | JiraWorklogResult
@@ -47,7 +48,7 @@ export class JiraDataCache {
     options?: CacheOptions
   ) {
     return this.#cached(
-      `worklogs:${monthCacheKey(month, this.#now())}`,
+      `worklogs:${yearMonthKey(month, new Date(this.#now()))}`,
       load,
       options
     )
@@ -56,7 +57,7 @@ export class JiraDataCache {
   invalidateAfterWorklogCreate(worklogMonth: string) {
     this.#cache.deletePrefix("issues:")
     this.#cache.delete(`worklogs:${worklogMonth}`)
-    this.#cache.delete(`worklogs:${monthCacheKey(null, this.#now())}`)
+    this.#cache.delete(`worklogs:${yearMonthKey(null, new Date(this.#now()))}`)
   }
 
   clear() {
@@ -79,13 +80,4 @@ export class JiraDataCache {
 
     return value
   }
-}
-
-function monthCacheKey(value: string | null, nowMs: number) {
-  const now = new Date(nowMs)
-  const match = value?.match(/^(\d{4})-(\d{1,2})$/)
-  const year = match ? Number(match[1]) : now.getFullYear()
-  const monthIndex = match ? Number(match[2]) - 1 : now.getMonth()
-
-  return `${year}-${String(monthIndex + 1).padStart(2, "0")}`
 }

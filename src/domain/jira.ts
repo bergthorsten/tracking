@@ -1,3 +1,5 @@
+const EXACT_ISSUE_KEY_PATTERN = /^[A-Z][A-Z0-9]+-\d+$/
+
 export function normalizeJiraHost(value: unknown) {
   if (typeof value !== "string") {
     throw new TypeError("Enter a Jira site.")
@@ -43,7 +45,7 @@ export function normalizeJiraIssueKey(value: unknown) {
 
   const issueKey = value.trim().toUpperCase()
 
-  if (!/^[A-Z][A-Z0-9]+-\d+$/.test(issueKey)) {
+  if (!isExactJiraIssueKey(issueKey)) {
     throw new TypeError("Choose a valid Jira ticket.")
   }
 
@@ -56,4 +58,8 @@ export function projectKeyFromIssueKey(value: string, fallback = "JIRA") {
 
 export function isJiraKeySearch(value: string) {
   return /^[A-Za-z][A-Za-z0-9]+-/.test(value.trim())
+}
+
+export function isExactJiraIssueKey(value: string) {
+  return EXACT_ISSUE_KEY_PATTERN.test(value.trim().toUpperCase())
 }

@@ -10,6 +10,7 @@ import {
   type AppReminder,
 } from "./app-settings"
 import {
+  isExactJiraIssueKey,
   isJiraKeySearch,
   normalizeJiraHost,
   normalizeJiraIssueKey,
@@ -26,6 +27,7 @@ import {
   worklogCommentText,
 } from "./time-tracking"
 import { initialsFromName } from "./user"
+import { yearMonthKey, yearMonthRange } from "./year-month"
 import { TtlCache } from "../shared/cache"
 
 describe("jiraWorklogPayload", () => {
@@ -338,6 +340,22 @@ describe("jira display helpers", () => {
     expect(projectKeyFromIssueKey("", "APP")).toBe("APP")
     expect(isJiraKeySearch("plat-")).toBe(true)
     expect(isJiraKeySearch("not a key")).toBe(false)
+    expect(isExactJiraIssueKey("plat-123")).toBe(true)
+    expect(isExactJiraIssueKey("plat-")).toBe(false)
+  })
+})
+
+describe("year month helpers", () => {
+  it("formats explicit and fallback month keys", () => {
+    expect(yearMonthKey("2026-7")).toBe("2026-07")
+    expect(yearMonthKey(null, new Date(2026, 6, 9))).toBe("2026-07")
+  })
+
+  it("returns local month ranges", () => {
+    const range = yearMonthRange("2026-07")
+
+    expect(range.start).toEqual(new Date(2026, 6, 1))
+    expect(range.end).toEqual(new Date(2026, 7, 1))
   })
 })
 

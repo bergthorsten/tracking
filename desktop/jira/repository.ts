@@ -5,11 +5,17 @@ import type {
   JiraWorklogResult,
   SavedJiraSettings as PublicJiraSettings,
 } from "../../src/contracts/desktop-api.ts"
+import { isExactJiraIssueKey } from "../../src/domain/jira.ts"
 import {
   jiraWorklogPayload,
   normalizeCreateWorklogInput,
   worklogCommentText,
 } from "../../src/domain/time-tracking.ts"
+import {
+  yearMonthKeyFromDate,
+  yearMonthRange,
+  type YearMonthRange,
+} from "../../src/domain/year-month.ts"
 import { isTerminalJiraError, type createJiraClient } from "./client.ts"
 import type { JiraDataCache } from "./data-cache.ts"
 
@@ -56,11 +62,6 @@ interface JiraWorklog {
   comment?: unknown
   started?: string
   timeSpentSeconds?: number
-}
-
-interface WorklogRange {
-  start: Date
-  end: Date
 }
 
 type JiraClient = ReturnType<typeof createJiraClient>
@@ -236,7 +237,7 @@ export function createJiraRepository({
 
   async function searchJiraTickets(settings: StoredJiraSettings, query: string) {
     const maybeKey = query.toUpperCase()
-    const jql = /^[A-Z][A-Z0-9]+-\d+$/.test(maybeKey)
+    const jql = isExactJiraIssueKey(maybeKey)
       ? `key = ${maybeKey}`
       : `text ~ ${jqlString(query)} ORDER BY updated DESC`
 
@@ -323,7 +324,7 @@ export function createJiraRepository({
 
   async function searchWorklogIssues(
     settings: StoredJiraSettings,
-    range: WorklogRange
+    range: YearMonthRange
   ) {
     const issues: JiraIssue[] = []
     let nextPageToken: string | undefined
@@ -358,7 +359,7 @@ export function createJiraRepository({
     month: string | null
   ): Promise<JiraWorklogResult> {
     const accountId = await accountIdFor(settings)
-    const range = monthRange(month)
+    const range = yearMonthRange(month)
     const issues = await searchWorklogIssues(settings, range)
     const logs: PublicWorklog[] = []
 
@@ -397,7 +398,7 @@ export function createJiraRepository({
     logs.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
 
     return {
-      month: `${range.start.getFullYear()}-${String(range.start.getMonth() + 1).padStart(2, "0")}`,
+      month: yearMonthKeyFromDate(range.start),
       totalMinutes: logs.reduce((total, log) => total + log.minutes, 0),
       logs,
     }
@@ -525,18 +526,6 @@ async function mapWithConcurrency<T, R>(
   )
 
   return results
-}
-
-function monthRange(value: string | null): WorklogRange {
-  const now = new Date()
-  const match = value?.match(/^(\d{4})-(\d{1,2})$/)
-  const year = match ? Number(match[1]) : now.getFullYear()
-  const monthIndex = match ? Number(match[2]) - 1 : now.getMonth()
-
-  return {
-    start: new Date(year, monthIndex, 1),
-    end: new Date(year, monthIndex + 1, 1),
-  }
 }
 
 function jiraDate(value: Date) {
