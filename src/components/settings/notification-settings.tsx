@@ -4,9 +4,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import type { AppReminder, FeatureStatus } from "@/desktop-bindings"
+import {
+  defaultReminderDays,
+  weekdays,
+  type Weekday,
+} from "@/domain/app-settings"
 import { cn } from "@/lib/utils"
-
-const DAYS = ["M", "T", "W", "T", "F", "S", "S"] as const
 
 export function NotificationSettings({
   enabled,
@@ -52,7 +55,7 @@ export function NotificationSettings({
       {
         id: `r${Date.now().toString(36)}`,
         time: "16:45",
-        days: [true, true, true, true, true, false, false],
+        days: [...defaultReminderDays],
         enabled: true,
       },
     ])
@@ -140,26 +143,30 @@ export function NotificationSettings({
               </Button>
             </div>
             <div className="flex items-center gap-1">
-              {DAYS.map((d, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  disabled={!controlsEnabled}
-                  onClick={() => {
-                    const days = [...r.days]
-                    days[i] = !days[i]
-                    updateReminder(r.id, { days })
-                  }}
-                  className={cn(
-                    "flex size-6 items-center justify-center rounded-md text-[11px] font-medium transition-colors",
-                    r.days[i]
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/70"
-                  )}
-                >
-                  {d}
-                </button>
-              ))}
+              {weekdays.map(({ value, shortLabel }) => {
+                const selected = r.days.includes(value)
+
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={!controlsEnabled}
+                    onClick={() =>
+                      updateReminder(r.id, {
+                        days: toggleReminderDay(r.days, value),
+                      })
+                    }
+                    className={cn(
+                      "flex size-6 items-center justify-center rounded-md text-[11px] font-medium transition-colors",
+                      selected
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/70"
+                    )}
+                  >
+                    {shortLabel}
+                  </button>
+                )
+              })}
             </div>
           </div>
         ))}
@@ -176,4 +183,10 @@ export function NotificationSettings({
       </div>
     </div>
   )
+}
+
+function toggleReminderDay(days: Weekday[], day: Weekday) {
+  return days.includes(day)
+    ? days.filter((selectedDay) => selectedDay !== day)
+    : [...days, day]
 }

@@ -1,7 +1,11 @@
-import type { AppReminder } from "./app-settings.ts"
+import {
+  weekdays,
+  type AppReminder,
+  type Weekday,
+} from "./app-settings.ts"
 
-export function dayIndexFor(value: Date) {
-  return (value.getDay() + 6) % 7
+export function weekdayForDate(value: Date): Weekday {
+  return weekdays[(value.getDay() + 6) % 7].value
 }
 
 export function nextReminderDate(reminder: AppReminder, now = new Date()) {
@@ -18,7 +22,7 @@ export function nextReminderDate(reminder: AppReminder, now = new Date()) {
       0
     )
 
-    if (candidate <= now || !reminder.days[dayIndexFor(candidate)]) {
+    if (candidate <= now || !reminder.days.includes(weekdayForDate(candidate))) {
       continue
     }
 

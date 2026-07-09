@@ -1,9 +1,32 @@
 export const DEFAULT_CACHE_TTL_MINUTES = 5
 
+export type Weekday = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun"
+
+export const weekdays: ReadonlyArray<{
+  value: Weekday
+  shortLabel: string
+}> = [
+  { value: "mon", shortLabel: "M" },
+  { value: "tue", shortLabel: "T" },
+  { value: "wed", shortLabel: "W" },
+  { value: "thu", shortLabel: "T" },
+  { value: "fri", shortLabel: "F" },
+  { value: "sat", shortLabel: "S" },
+  { value: "sun", shortLabel: "S" },
+]
+
+export const defaultReminderDays: Weekday[] = [
+  "mon",
+  "tue",
+  "wed",
+  "thu",
+  "fri",
+]
+
 export interface AppReminder {
   id: string
   time: string
-  days: boolean[]
+  days: Weekday[]
   enabled: boolean
 }
 
@@ -26,13 +49,13 @@ export const defaultAppSettings: StoredAppSettings = {
     {
       id: "r1",
       time: "11:30",
-      days: [true, true, true, true, true, false, false],
+      days: [...defaultReminderDays],
       enabled: true,
     },
     {
       id: "r2",
       time: "16:45",
-      days: [true, true, true, true, true, false, false],
+      days: [...defaultReminderDays],
       enabled: true,
     },
   ],
@@ -64,20 +87,44 @@ export function normalizeReminder(
     throw new TypeError("Enter valid reminder times.")
   }
 
-  if (
-    !Array.isArray(value.days) ||
-    value.days.length !== 7 ||
-    !value.days.every((day) => typeof day === "boolean")
-  ) {
-    throw new TypeError("Choose valid reminder days.")
-  }
+  const days = normalizeReminderDays(value.days)
 
   return {
     id,
     time,
-    days: [...value.days],
+    days,
     enabled: value.enabled !== false,
   }
+}
+
+export function normalizeReminderDays(value: unknown): Weekday[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError("Choose valid reminder days.")
+  }
+
+  if (value.every((day) => typeof day === "boolean")) {
+    if (value.length !== weekdays.length) {
+      throw new TypeError("Choose valid reminder days.")
+    }
+
+    return weekdays
+      .filter((_, index) => value[index])
+      .map((weekday) => weekday.value)
+  }
+
+  if (!value.every(isWeekday)) {
+    throw new TypeError("Choose valid reminder days.")
+  }
+
+  const selected = new Set(value)
+
+  return weekdays
+    .map((weekday) => weekday.value)
+    .filter((weekday) => selected.has(weekday))
+}
+
+function isWeekday(value: unknown): value is Weekday {
+  return weekdays.some((weekday) => weekday.value === value)
 }
 
 export function normalizeGlobalShortcut(value: unknown) {

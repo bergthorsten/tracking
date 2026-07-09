@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest"
 
 import {
   defaultAppSettings,
+  defaultReminderDays,
   normalizeAppSettings,
   normalizeAppSettingsUpdate,
+  normalizeReminderDays,
   parseStoredAppSettings,
   type AppReminder,
 } from "./app-settings"
@@ -209,7 +211,7 @@ describe("normalizeAppSettings", () => {
           {
             id: "morning",
             time: "09:15",
-            days: [true, true, true, true, true, false, false],
+            days: [...defaultReminderDays],
             enabled: true,
           },
         ],
@@ -245,6 +247,12 @@ describe("normalizeAppSettings", () => {
         globalShortcut: "J",
       })
     ).toThrow("Enter a valid shortcut")
+  })
+
+  it("migrates legacy boolean reminder days to named weekdays", () => {
+    expect(
+      normalizeReminderDays([true, true, true, true, true, false, false])
+    ).toEqual(defaultReminderDays)
   })
 
   it("merges app settings patches and owns updatedAt", () => {
@@ -337,7 +345,7 @@ describe("nextReminderDate", () => {
   const weekdayReminder: AppReminder = {
     id: "r1",
     time: "11:30",
-    days: [true, true, true, true, true, false, false],
+    days: [...defaultReminderDays],
     enabled: true,
   }
 
@@ -366,7 +374,7 @@ describe("nextReminderDate", () => {
 
   it("rolls over to the next enabled week", () => {
     const next = nextReminderDate(
-      { ...weekdayReminder, days: [true, false, false, false, false, false, false] },
+      { ...weekdayReminder, days: ["mon"] },
       new Date(2026, 6, 6, 12, 0)
     )
 

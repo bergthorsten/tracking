@@ -17,7 +17,7 @@ import {
   type StoredAppSettings,
 } from "../src/domain/app-settings.ts"
 import { normalizeJiraHost } from "../src/domain/jira.ts"
-import { dayIndexFor, nextReminderDate } from "../src/domain/reminders.ts"
+import { nextReminderDate, weekdayForDate } from "../src/domain/reminders.ts"
 import {
   jiraWorklogPayload,
   normalizeCreateWorklogInput,
@@ -642,7 +642,7 @@ function scheduleReminders(settings: StoredAppSettings) {
         latest.notificationsEnabled &&
         latest.remindersEnabled &&
         latestReminder?.enabled &&
-        latestReminder.days[dayIndexFor(new Date())]
+        latestReminder.days.includes(weekdayForDate(new Date()))
       ) {
         showReminderNotification(latestReminder)
       }

@@ -9,19 +9,21 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { NotificationSettings } from "@/components/settings/notification-settings"
 import { useTheme } from "@/components/theme-provider"
 import { MOCK_USER } from "@/data/mock"
+import { defaultReminderDays } from "@/domain/app-settings"
+import type { AppReminder } from "@/desktop-bindings"
 import { cn } from "@/lib/utils"
 
-const MOCK_REMINDERS = [
+const MOCK_REMINDERS: AppReminder[] = [
   {
     id: "r1",
     time: "11:30",
-    days: [true, true, true, true, true, false, false],
+    days: [...defaultReminderDays],
     enabled: true,
   },
   {
     id: "r2",
     time: "16:45",
-    days: [true, true, true, true, true, false, false],
+    days: [...defaultReminderDays],
     enabled: true,
   },
 ]
