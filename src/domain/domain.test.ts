@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   defaultAppSettings,
   normalizeAppSettings,
+  normalizeAppSettingsUpdate,
   type AppReminder,
 } from "./app-settings"
 import {
@@ -243,6 +244,26 @@ describe("normalizeAppSettings", () => {
         globalShortcut: "J",
       })
     ).toThrow("Enter a valid shortcut")
+  })
+
+  it("merges app settings patches and owns updatedAt", () => {
+    const current = normalizeAppSettings(defaultAppSettings, new Date(0))
+    const now = new Date("2026-07-06T12:00:00.000Z")
+
+    const settings = normalizeAppSettingsUpdate(
+      current,
+      {
+        notificationsEnabled: true,
+        updatedAt: "client-owned-value",
+      },
+      now
+    )
+
+    expect(settings).toMatchObject({
+      notificationsEnabled: true,
+      remindersEnabled: current.remindersEnabled,
+      updatedAt: now.toISOString(),
+    })
   })
 })
 

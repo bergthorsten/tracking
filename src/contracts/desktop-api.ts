@@ -1,6 +1,7 @@
 import type {
   AppReminder,
   StoredAppSettings,
+  UpdateAppSettingsInput,
 } from "../domain/app-settings.ts"
 
 export type { AppReminder } from "../domain/app-settings.ts"
@@ -74,7 +75,7 @@ export interface FeatureStatus {
   message?: string
 }
 
-export interface AppSettings extends StoredAppSettings {
+export interface PublicAppSettings extends StoredAppSettings {
   reminders: AppReminder[]
   native: {
     launchAtLogin: FeatureStatus
@@ -83,7 +84,7 @@ export interface AppSettings extends StoredAppSettings {
   }
 }
 
-export type AppSettingsInput = StoredAppSettings
+export type AppSettingsInput = UpdateAppSettingsInput
 
 export interface ShortcutResult {
   shortcut: string

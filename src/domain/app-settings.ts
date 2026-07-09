@@ -17,6 +17,8 @@ export interface StoredAppSettings {
   updatedAt: string
 }
 
+export type UpdateAppSettingsInput = Partial<Omit<StoredAppSettings, "updatedAt">>
+
 export const defaultAppSettings: StoredAppSettings = {
   remindersEnabled: true,
   notificationsEnabled: false,
@@ -140,6 +142,18 @@ export function normalizeAppSettings(
         : DEFAULT_CACHE_TTL_MINUTES,
     updatedAt: now.toISOString(),
   }
+}
+
+export function normalizeAppSettingsUpdate(
+  current: StoredAppSettings,
+  patch: unknown,
+  now = new Date()
+): StoredAppSettings {
+  if (!isRecord(patch)) {
+    throw new TypeError("Enter app settings.")
+  }
+
+  return normalizeAppSettings({ ...current, ...patch }, now)
 }
 
 export function isStoredAppSettings(value: unknown): value is StoredAppSettings {

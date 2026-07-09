@@ -1,6 +1,5 @@
 import {
   desktopApiPaths,
-  type AppSettings,
   type AppSettingsInput,
   type CreateJiraWorklogInput,
   type FeatureStatus,
@@ -8,13 +7,13 @@ import {
   type JiraTicket,
   type JiraWorklog,
   type JiraWorklogResult,
+  type PublicAppSettings,
   type SavedJiraSettings,
   type ShortcutResult,
 } from "./contracts/desktop-api"
 
 export type {
   AppReminder,
-  AppSettings,
   AppSettingsInput,
   CreateJiraWorklogInput,
   FeatureStatus,
@@ -22,6 +21,7 @@ export type {
   JiraTicket,
   JiraWorklog,
   JiraWorklogResult,
+  PublicAppSettings,
   SavedJiraSettings,
   ShortcutResult,
 } from "./contracts/desktop-api"
@@ -30,8 +30,8 @@ export interface DesktopBindings {
   loadJiraSettings(): Promise<SavedJiraSettings | null>
   saveJiraSettings(settings: JiraSettingsInput): Promise<SavedJiraSettings>
   disconnectJira(): Promise<void>
-  loadAppSettings(): Promise<AppSettings>
-  saveAppSettings(settings: AppSettingsInput): Promise<AppSettings>
+  loadAppSettings(): Promise<PublicAppSettings>
+  saveAppSettings(settings: AppSettingsInput): Promise<PublicAppSettings>
   getLaunchAtLogin(): Promise<FeatureStatus>
   setLaunchAtLogin(enabled: boolean): Promise<FeatureStatus>
   getNotificationStatus(): Promise<FeatureStatus>
@@ -68,9 +68,9 @@ const httpDesktopBindings: DesktopBindings = {
     }),
   disconnectJira: () =>
     requestDesktop<void>(jiraSettingsEndpoint, { method: "DELETE" }),
-  loadAppSettings: () => requestDesktop<AppSettings>(appSettingsEndpoint),
+  loadAppSettings: () => requestDesktop<PublicAppSettings>(appSettingsEndpoint),
   saveAppSettings: (settings) =>
-    requestDesktop<AppSettings>(appSettingsEndpoint, {
+    requestDesktop<PublicAppSettings>(appSettingsEndpoint, {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(settings),

@@ -22,8 +22,8 @@ import { useTheme } from "@/components/theme-provider"
 import {
   getDesktopBindings,
   type AppReminder,
-  type AppSettings,
   type AppSettingsInput,
+  type PublicAppSettings,
   type SavedJiraSettings,
 } from "@/desktop-bindings"
 import { initialsFromName } from "@/domain/user"
@@ -45,7 +45,8 @@ export function SettingsScreen({
   onDisconnected?: () => void
 }) {
   const [user, setUser] = React.useState<ConnectionUser | null>(null)
-  const [appSettings, setAppSettings] = React.useState<AppSettings | null>(null)
+  const [appSettings, setAppSettings] =
+    React.useState<PublicAppSettings | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [disconnecting, setDisconnecting] = React.useState(false)
   const settingsSaveVersion = React.useRef(0)
@@ -109,19 +110,8 @@ export function SettingsScreen({
       return
     }
 
-    const next = {
-      remindersEnabled: appSettings.remindersEnabled,
-      notificationsEnabled: appSettings.notificationsEnabled,
-      reminders: appSettings.reminders,
-      launchAtLogin: appSettings.launchAtLogin,
-      globalShortcut: appSettings.globalShortcut,
-      cacheTtlMinutes: appSettings.cacheTtlMinutes,
-      updatedAt: appSettings.updatedAt,
-      ...patch,
-    }
-
-    setAppSettings((current) => (current ? { ...current, ...next } : current))
-    void saveAppSettings(next)
+    setAppSettings((current) => (current ? { ...current, ...patch } : current))
+    void saveAppSettings(patch)
   }
 
   const toggleNotifications = async (enabled: boolean) => {

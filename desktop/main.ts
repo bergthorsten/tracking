@@ -1,8 +1,8 @@
 import {
   desktopApiPaths,
-  type AppSettings as PublicAppSettings,
   type FeatureStatus,
   type JiraSettingsInput,
+  type PublicAppSettings,
   type JiraTicket as PublicJiraTicket,
   type JiraWorklog as PublicWorklog,
   type SavedJiraSettings as PublicJiraSettings,
@@ -11,7 +11,7 @@ import {
   defaultAppSettings,
   isRecord,
   isStoredAppSettings,
-  normalizeAppSettings,
+  normalizeAppSettingsUpdate,
   normalizeGlobalShortcut,
   type AppReminder,
   type StoredAppSettings,
@@ -390,7 +390,7 @@ async function loadAppSettings(): Promise<PublicAppSettings> {
 }
 
 async function saveAppSettings(value: unknown) {
-  const settings = normalizeAppSettings(value)
+  const settings = normalizeAppSettingsUpdate(await readStoredAppSettings(), value)
 
   await saveStoredAppSettings(settings)
 
