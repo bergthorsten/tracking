@@ -23,11 +23,11 @@ import {
   normalizeCreateWorklogInput,
   worklogCommentText,
 } from "../src/domain/time-tracking.ts"
-import { TtlCache } from "../src/shared/cache.ts"
 import {
   createJiraClient,
   isTerminalJiraError,
 } from "./jira/client.ts"
+import { JiraDataCache } from "./jira/data-cache.ts"
 import { errorMessage, jsonResponse } from "./server/responses.ts"
 import { createRouteHandler } from "./server/routes.ts"
 import { serveStaticApp } from "./server/serve-app.ts"
@@ -124,7 +124,10 @@ function appDataDir() {
 const settingsDir = appDataDir()
 const settingsPath = `${settingsDir}${Deno.build.os === "windows" ? "\\" : "/"}${SETTINGS_FILE}`
 const appSettingsPath = `${settingsDir}${Deno.build.os === "windows" ? "\\" : "/"}${APP_SETTINGS_FILE}`
-const jiraCache = new TtlCache()
+const jiraDataCache = new JiraDataCache({
+  loadTtlMs: async () =>
+    (await readStoredAppSettings()).cacheTtlMinutes * 60 * 1000,
+})
 const reminderTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 if (defaultAppSettings.globalShortcut !== DEFAULT_GLOBAL_SHORTCUT) {
@@ -144,42 +147,8 @@ function isStoredJiraSettings(value: unknown): value is StoredJiraSettings {
   )
 }
 
-function cacheKeyForMonth(value: string | null) {
-  const range = monthRange(value)
-
-  return `${range.start.getFullYear()}-${String(range.start.getMonth() + 1).padStart(2, "0")}`
-}
-
-async function cachedJiraData<T>(
-  key: string,
-  load: () => Promise<T>,
-  options: { force?: boolean } = {}
-) {
-  const cached = options.force ? undefined : jiraCache.get<T>(key)
-
-  if (cached) {
-    return cached.value
-  }
-
-  const value = await load()
-  const settings = await readStoredAppSettings()
-  jiraCache.set(key, value, settings.cacheTtlMinutes * 60 * 1000)
-
-  return value
-}
-
 function clearJiraCache() {
-  jiraCache.clear()
-}
-
-function deleteCacheKeyPrefix(prefix: string) {
-  jiraCache.deletePrefix(prefix)
-}
-
-function invalidateJiraCacheAfterWorklogCreate(worklogMonth: string) {
-  deleteCacheKeyPrefix("issues:")
-  jiraCache.delete(`worklogs:${worklogMonth}`)
-  jiraCache.delete(`worklogs:${cacheKeyForMonth(null)}`)
+  jiraDataCache.clear()
 }
 
 function publicJiraSettings(settings: StoredJiraSettings): PublicJiraSettings {
@@ -1039,7 +1008,7 @@ async function createJiraWorklog(
       ? created.timeSpentSeconds
       : input.minutes * 60
 
-  invalidateJiraCacheAfterWorklogCreate(input.date.slice(0, 7))
+  jiraDataCache.invalidateAfterWorklogCreate(input.date.slice(0, 7))
 
   return {
     id: `${input.issueKey}-${created.id}`,
@@ -1243,7 +1212,7 @@ async function handleJiraProfileApi(request: Request) {
 
   try {
     return jsonResponse(
-      await cachedJiraData("profile", async () =>
+      await jiraDataCache.getProfile(async () =>
         fetchJiraProfile(await getRequiredStoredJiraSettings())
       )
     )
@@ -1266,7 +1235,7 @@ async function handleJiraIssuesApi(request: Request) {
     const normalizedQuery = query.trim()
 
     return jsonResponse(
-      await cachedJiraData(`issues:${normalizedQuery}`, async () =>
+      await jiraDataCache.getIssues(normalizedQuery, async () =>
         searchJiraTickets(
           await getRequiredStoredJiraSettings(),
           normalizedQuery
@@ -1311,10 +1280,9 @@ async function handleJiraWorklogsApi(request: Request) {
   try {
     const url = new URL(request.url)
     const month = url.searchParams.get("month")
-    const cacheKey = `worklogs:${cacheKeyForMonth(month)}`
 
     return jsonResponse(
-      await cachedJiraData(cacheKey, async () =>
+      await jiraDataCache.getWorklogs(month, async () =>
         loadJiraWorklogs(await getRequiredStoredJiraSettings(), month)
       )
     )

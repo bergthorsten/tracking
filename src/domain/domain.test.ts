@@ -179,24 +179,24 @@ describe("TtlCache", () => {
   it("returns fresh entries and expires stale entries", () => {
     const cache = new TtlCache<string>()
 
-    cache.set("profile", "Ada", 100, 1_000)
+    cache.set("user", "Ada", 100, 1_000)
 
-    expect(cache.get("profile", 1_050)?.value).toBe("Ada")
-    expect(cache.get("profile", 1_101)).toBeUndefined()
+    expect(cache.get("user", 1_050)?.value).toBe("Ada")
+    expect(cache.get("user", 1_101)).toBeUndefined()
   })
 
   it("invalidates matching prefixes only", () => {
     const cache = new TtlCache<string>()
 
-    cache.set("issues:", "recent", 100, 1_000)
-    cache.set("issues:abc", "search", 100, 1_000)
-    cache.set("worklogs:2026-07", "month", 100, 1_000)
+    cache.set("group:", "recent", 100, 1_000)
+    cache.set("group:abc", "search", 100, 1_000)
+    cache.set("other:2026-07", "month", 100, 1_000)
 
-    cache.deletePrefix("issues:")
+    cache.deletePrefix("group:")
 
-    expect(cache.get("issues:", 1_001)).toBeUndefined()
-    expect(cache.get("issues:abc", 1_001)).toBeUndefined()
-    expect(cache.get("worklogs:2026-07", 1_001)?.value).toBe("month")
+    expect(cache.get("group:", 1_001)).toBeUndefined()
+    expect(cache.get("group:abc", 1_001)).toBeUndefined()
+    expect(cache.get("other:2026-07", 1_001)?.value).toBe("month")
   })
 })
 
