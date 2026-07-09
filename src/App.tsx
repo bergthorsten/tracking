@@ -81,7 +81,7 @@ function DesktopPanelApp() {
 function DesktopLoadingScreen() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 bg-background px-6 text-center">
-      <div className="size-8 rounded-xl bg-primary/10" />
+      <img src="/logo.png" alt="" className="size-10 rounded-2xl shadow-sm" />
       <p className="text-sm font-medium">Loading Jira settings...</p>
       <p className="text-xs text-muted-foreground">
         Checking whether this device has already been connected.

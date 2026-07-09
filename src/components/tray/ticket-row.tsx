@@ -13,34 +13,56 @@ import { cn } from "@/lib/utils"
 export function TicketRow({
   ticket,
   onOpen,
+  jiraHost,
   className,
 }: {
   ticket: Ticket
   onOpen: (ticket: Ticket) => void
+  jiraHost?: string
   className?: string
 }) {
   const meta = projectMetaFor(ticket.project)
+  const jiraUrl = jiraHost
+    ? `https://${jiraHost}/browse/${encodeURIComponent(ticket.key)}`
+    : undefined
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onOpen(ticket)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onOpen(ticket)
+        }
+      }}
       className={cn(
-        "group/row flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted/70",
+        "group/row flex w-full cursor-pointer items-center gap-3 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         className
       )}
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-sm font-medium">{ticket.title}</span>
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1 font-mono text-[11px] font-medium tracking-tight text-foreground/70">
-            <span
-              aria-hidden
-              className="size-1.5 rounded-full"
-              style={{ backgroundColor: meta.tint }}
-            />
-            {ticket.key}
-          </span>
+          {jiraUrl ? (
+            <a
+              href={jiraUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              className="inline-flex items-center gap-1 rounded-sm font-mono text-[11px] font-medium tracking-tight text-foreground/70 underline-offset-2 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <TicketDot tint={meta.tint} />
+              {ticket.key}
+            </a>
+          ) : (
+            <span className="inline-flex items-center gap-1 font-mono text-[11px] font-medium tracking-tight text-foreground/70">
+              <TicketDot tint={meta.tint} />
+              {ticket.key}
+            </span>
+          )}
           {ticket.todayMinutes > 0 ? (
             <>
               <Sep />
@@ -60,7 +82,17 @@ export function TicketRow({
       >
         <Plus className="size-4" />
       </span>
-    </button>
+    </div>
+  )
+}
+
+function TicketDot({ tint }: { tint: string }) {
+  return (
+    <span
+      aria-hidden
+      className="size-1.5 rounded-full"
+      style={{ backgroundColor: tint }}
+    />
   )
 }
 

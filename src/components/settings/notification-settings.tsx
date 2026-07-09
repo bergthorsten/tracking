@@ -29,7 +29,7 @@ export function NotificationSettings({
 }) {
   const supported = notificationStatus?.supported !== false
   const active = enabled && supported
-  const controlsEnabled = active && remindersEnabled && !saving
+  const controlsEnabled = active && remindersEnabled
   const subtitle = !supported
     ? notificationStatus?.message || "Native notifications are unavailable"
     : notificationStatus?.permission === "denied"
@@ -167,7 +167,7 @@ export function NotificationSettings({
         <Button
           size="xs"
           variant="outline"
-          disabled={!controlsEnabled || reminders.length >= 8}
+          disabled={!controlsEnabled || saving || reminders.length >= 8}
           onClick={addReminder}
           className="self-start"
         >

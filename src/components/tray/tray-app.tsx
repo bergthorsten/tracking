@@ -11,6 +11,7 @@ import { WorklogView } from "@/components/tray/worklog-view"
 import { LogTimeSheet } from "@/components/tray/log-time-sheet"
 import type { Ticket } from "@/data/domain"
 import { getDesktopBindings, type SavedJiraSettings } from "@/desktop-bindings"
+import { initialsFromName } from "@/domain/user"
 import { formatDuration } from "@/lib/time"
 
 type CurrentUser = {
@@ -178,13 +179,17 @@ export function TrayApp({ onOpenSettings }: { onOpenSettings?: () => void }) {
           value="track"
           className="flex min-h-0 flex-1 flex-col data-[hidden]:hidden"
         >
-          <TrackView onOpenTicket={setLogging} refreshKey={refreshKey} />
+          <TrackView
+            onOpenTicket={setLogging}
+            jiraHost={user?.host}
+            refreshKey={refreshKey}
+          />
         </TabsContent>
         <TabsContent
           value="worklog"
           className="flex min-h-0 flex-1 flex-col data-[hidden]:hidden"
         >
-          <WorklogView refreshKey={refreshKey} />
+          <WorklogView jiraHost={user?.host} refreshKey={refreshKey} />
         </TabsContent>
       </Tabs>
 
@@ -245,12 +250,4 @@ function userFromSettings(settings: SavedJiraSettings): CurrentUser {
     initials: initialsFromName(name),
     avatarUrl: settings.avatarUrl,
   }
-}
-
-function initialsFromName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  const initials =
-    parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : name.slice(0, 2)
-
-  return initials.toUpperCase()
 }

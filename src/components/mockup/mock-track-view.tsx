@@ -8,7 +8,8 @@ import { MockMonthSummary } from "@/components/mockup/mock-month-summary"
 import { SectionLabel } from "@/components/tray/section-label"
 import { TicketRow } from "@/components/tray/ticket-row"
 import type { Ticket } from "@/data/domain"
-import { RECENT_TICKETS, SEARCHABLE_TICKETS } from "@/data/mock"
+import { MOCK_USER, RECENT_TICKETS, SEARCHABLE_TICKETS } from "@/data/mock"
+import { isJiraKeySearch } from "@/domain/jira"
 
 export function MockTrackView({
   onOpenTicket,
@@ -18,10 +19,10 @@ export function MockTrackView({
   const [query, setQuery] = React.useState("")
   const inputRef = React.useRef<HTMLInputElement>(null)
 
-  const searching = query.trim().length > 0
+  const searching = isJiraKeySearch(query)
   const results = React.useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return []
+    if (!isJiraKeySearch(q)) return []
     return SEARCHABLE_TICKETS.filter(
       (ticket) =>
         ticket.key.toLowerCase().includes(q) ||
@@ -39,10 +40,10 @@ export function MockTrackView({
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search any ticket by key or title…"
+            placeholder="Type a ticket key, e.g. PC-"
             className="h-9 pr-8 pl-8"
           />
-          {searching ? (
+          {query.trim() ? (
             <Button
               size="icon-xs"
               variant="ghost"
@@ -78,7 +79,7 @@ export function MockTrackView({
               </div>
               <p className="text-sm font-medium">No tickets match "{query}"</p>
               <p className="text-xs text-muted-foreground">
-                Try the full issue key, e.g. PLAT-1428.
+                Try the full issue key, e.g. PC-1234.
               </p>
             </div>
           ) : (
@@ -88,6 +89,7 @@ export function MockTrackView({
                   key={ticket.key}
                   ticket={ticket}
                   onOpen={onOpenTicket}
+                  jiraHost={MOCK_USER.host}
                 />
               ))}
             </div>

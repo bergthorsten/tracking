@@ -10,6 +10,7 @@ import { SectionLabel } from "@/components/tray/section-label"
 import { TicketRow } from "@/components/tray/ticket-row"
 import type { Ticket } from "@/data/domain"
 import { getDesktopBindings } from "@/desktop-bindings"
+import { isJiraKeySearch } from "@/domain/jira"
 
 /**
  * Primary view: search, recent tickets, and the month summary footer.
@@ -17,9 +18,11 @@ import { getDesktopBindings } from "@/desktop-bindings"
  */
 export function TrackView({
   onOpenTicket,
+  jiraHost,
   refreshKey = 0,
 }: {
   onOpenTicket: (ticket: Ticket) => void
+  jiraHost?: string
   refreshKey?: number
 }) {
   const [query, setQuery] = React.useState("")
@@ -28,10 +31,12 @@ export function TrackView({
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const deferredQuery = React.useDeferredValue(query)
+  const searchQuery = isJiraKeySearch(deferredQuery) ? deferredQuery.trim() : ""
   const inputRef = React.useRef<HTMLInputElement>(null)
   const desktopBindings = React.useMemo(() => getDesktopBindings(), [])
 
-  const searching = query.trim().length > 0
+  const hasQuery = query.trim().length > 0
+  const searching = isJiraKeySearch(query)
   React.useEffect(() => {
     if (!desktopBindings) {
       return
@@ -44,13 +49,13 @@ export function TrackView({
         setError(null)
 
         void desktopBindings
-          .loadJiraIssues(deferredQuery.trim())
+          .loadJiraIssues(searchQuery)
           .then((tickets) => {
             if (cancelled) {
               return
             }
 
-            if (deferredQuery.trim()) {
+            if (searchQuery) {
               setSearchResults(tickets)
             } else {
               setRecentTickets(tickets)
@@ -71,14 +76,14 @@ export function TrackView({
             }
           })
       },
-      deferredQuery.trim() ? 250 : 0
+      searchQuery ? 250 : 0
     )
 
     return () => {
       cancelled = true
       window.clearTimeout(timeout)
     }
-  }, [deferredQuery, desktopBindings, refreshKey])
+  }, [searchQuery, desktopBindings, refreshKey])
 
   const results = searchResults
   const list = searching ? results : recentTickets
@@ -93,10 +98,10 @@ export function TrackView({
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search any ticket by key or title…"
+            placeholder="Type a ticket key, e.g. PC-"
             className="h-9 pr-8 pl-8"
           />
-          {searching ? (
+          {hasQuery ? (
             <Button
               size="icon-xs"
               variant="ghost"
@@ -141,7 +146,12 @@ export function TrackView({
           ) : (
             <div className="flex flex-col">
               {list.map((t) => (
-                <TicketRow key={t.key} ticket={t} onOpen={onOpenTicket} />
+                <TicketRow
+                  key={t.key}
+                  ticket={t}
+                  onOpen={onOpenTicket}
+                  jiraHost={jiraHost}
+                />
               ))}
             </div>
           )}
@@ -170,7 +180,7 @@ function EmptyState({
       </p>
       <p className="text-xs text-muted-foreground">
         {searching
-          ? "Try the full issue key, e.g. PLAT-1428."
+          ? "Try the full issue key, e.g. PC-1234."
           : "Jira returned no tracked or recently changed tickets."}
       </p>
     </div>

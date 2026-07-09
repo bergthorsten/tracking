@@ -1,68 +1,55 @@
 import {
+  desktopApiPaths,
+  type AppSettings as PublicAppSettings,
+  type FeatureStatus,
+  type JiraSettingsInput,
+  type JiraTicket as PublicJiraTicket,
+  type JiraWorklog as PublicWorklog,
+  type SavedJiraSettings as PublicJiraSettings,
+} from "../src/contracts/desktop-api.ts"
+import {
   defaultAppSettings,
-  dayIndexFor,
   isRecord,
   isStoredAppSettings,
-  jiraWorklogPayload,
-  nextReminderDate,
   normalizeAppSettings,
   normalizeGlobalShortcut,
-  TtlCache,
   type AppReminder,
   type StoredAppSettings,
-} from "../src/features/desktop-logic.ts"
+} from "../src/domain/app-settings.ts"
+import { normalizeJiraHost } from "../src/domain/jira.ts"
+import { dayIndexFor, nextReminderDate } from "../src/domain/reminders.ts"
+import {
+  jiraWorklogPayload,
+  normalizeCreateWorklogInput,
+  worklogCommentText,
+} from "../src/domain/time-tracking.ts"
+import { TtlCache } from "../src/shared/cache.ts"
+import {
+  createJiraClient,
+  isTerminalJiraError,
+} from "./jira/client.ts"
+import { errorMessage, jsonResponse } from "./server/responses.ts"
+import { createRouteHandler } from "./server/routes.ts"
+import { serveStaticApp } from "./server/serve-app.ts"
 
 const PANEL_WIDTH = 400
 const PANEL_HEIGHT = 600
 const APP_NAME = "Jira-Tracking"
 const SETTINGS_FILE = "jira-settings.json"
 const APP_SETTINGS_FILE = "app-settings.json"
-const JIRA_SETTINGS_API_PATH = "/api/jira-settings"
-const APP_SETTINGS_API_PATH = "/api/app-settings"
-const JIRA_PROFILE_API_PATH = "/api/jira-profile"
-const JIRA_ISSUES_API_PATH = "/api/jira-issues"
-const JIRA_WORKLOGS_API_PATH = "/api/jira-worklogs"
-const JIRA_REFRESH_API_PATH = "/api/jira-refresh"
-const LAUNCH_AT_LOGIN_API_PATH = "/api/launch-at-login"
-const NOTIFICATIONS_API_PATH = "/api/notifications"
-const SHORTCUT_API_PATH = "/api/shortcut"
 const WORKLOG_FETCH_CONCURRENCY = 4
 const DEFAULT_GLOBAL_SHORTCUT = "CmdOrCtrl+Shift+J"
 const APP_IDENTIFIER = "de.bergfreunde.jira-tracking"
 const SHOW_PANEL_ON_START = Deno.args.includes("--show-panel")
-const TRAY_ICON_LIGHT =
-  "iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAWUlEQVR4nGNgGEDwHwcenAbjMpQiwwkZSpbh2DSii5FsOC7FuAwiynB8riBkMF7D8SkgxtLBazDJKWRADCbGcLINJlsfOTmKaD3kGkw1V1ClvKB7CTcKCAMAXSiKdkMrOMkAAAAASUVORK5CYII="
-const TRAY_ICON_DARK =
-  "iVBORw0KGgoAAAANSUhEUgAAABYAAAAWCAYAAADEtGw7AAAAZUlEQVR4nNWTWwoAIAgEu/+l7T9anRUCW/AndHykKyLWCyNOSjPBlVpgKgt8CzzfUngGJcmkPw0m4CBgOh4ZNw6sNAtsHYwLrhK21o100ToQXK0C08pTH9oi+jAKtrbABbftP/AGh98xJAE7q00AAAAASUVORK5CYII="
+const DISABLE_AUTO_UPDATE = Deno.args.includes("--disable-auto-update")
 
 const distRoot = new URL("../dist/", import.meta.url)
-
-const mimeTypes: Record<string, string> = {
-  ".css": "text/css; charset=utf-8",
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".woff2": "font/woff2",
-}
-
-interface JiraSettingsInput {
-  host: string
-  email: string
-  token: string
-}
+const appIcon = await Deno.readFile(new URL("logo.png", distRoot))
+const trayIcon = await Deno.readFile(new URL("icon.svg", distRoot))
+const appIconDataUrl = pngDataUrl(appIcon)
+const jiraClient = createJiraClient({ fetch })
 
 interface StoredJiraSettings extends JiraSettingsInput {
-  accountId?: string
-  avatarUrl?: string
-  displayName?: string
-  updatedAt: string
-}
-
-interface PublicJiraSettings {
-  [key: string]: unknown
-  host: string
-  email: string
   accountId?: string
   avatarUrl?: string
   displayName?: string
@@ -89,14 +76,6 @@ interface JiraSearchResponse {
   nextPageToken?: string
 }
 
-interface PublicJiraTicket {
-  key: string
-  title: string
-  project: string
-  todayMinutes: number
-  lastWorked: string
-}
-
 interface JiraWorklogResponse {
   maxResults?: number
   total?: number
@@ -111,40 +90,6 @@ interface JiraWorklog {
   comment?: unknown
   started?: string
   timeSpentSeconds?: number
-}
-
-interface PublicWorklog {
-  id: string
-  ticketKey: string
-  ticketTitle: string
-  minutes: number
-  startedAt: string
-  description?: string
-}
-
-interface FeatureStatus {
-  supported: boolean
-  enabled?: boolean
-  permission?: NotificationPermission | "unsupported"
-  registered?: boolean
-  message?: string
-}
-
-interface PublicAppSettings extends StoredAppSettings {
-  native: {
-    launchAtLogin: FeatureStatus
-    notifications: FeatureStatus
-    globalShortcut: FeatureStatus
-  }
-}
-
-interface NormalizedCreateWorklogInput {
-  issueKey: string
-  ticketTitle?: string
-  minutes: number
-  date: string
-  started: Date
-  note?: string
 }
 
 interface WorklogRange {
@@ -259,44 +204,6 @@ function publicJiraSettings(settings: StoredJiraSettings): PublicJiraSettings {
   return result
 }
 
-function normalizeHost(value: unknown) {
-  if (typeof value !== "string") {
-    throw new TypeError("Enter a Jira site.")
-  }
-
-  const raw = value.trim().replace(/\/+$/, "")
-  const href = /^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`
-  let url: URL
-
-  try {
-    url = new URL(href)
-  } catch {
-    throw new TypeError("Enter a valid Jira site.")
-  }
-
-  if (url.protocol !== "https:" || !url.hostname) {
-    throw new TypeError("Use an HTTPS Jira site.")
-  }
-
-  if (
-    url.username ||
-    url.password ||
-    url.pathname !== "/" ||
-    url.search ||
-    url.hash
-  ) {
-    throw new TypeError("Enter only the Jira site host.")
-  }
-
-  const host = url.host.toLowerCase()
-
-  if (!/^[a-z0-9.-]+(?::\d{1,5})?$/i.test(host)) {
-    throw new TypeError("Enter a valid Jira site.")
-  }
-
-  return host
-}
-
 function normalizeEmail(value: unknown) {
   if (typeof value !== "string") {
     throw new TypeError("Enter a Jira account email.")
@@ -325,223 +232,16 @@ function normalizeToken(value: unknown) {
   return token
 }
 
-function normalizeIssueKey(value: unknown) {
-  if (typeof value !== "string") {
-    throw new TypeError("Choose a Jira ticket.")
-  }
-
-  const issueKey = value.trim().toUpperCase()
-
-  if (!/^[A-Z][A-Z0-9]+-\d+$/.test(issueKey)) {
-    throw new TypeError("Choose a valid Jira ticket.")
-  }
-
-  return issueKey
-}
-
-function normalizePositiveMinutes(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw new TypeError("Enter time to log.")
-  }
-
-  const minutes = Math.round(value)
-
-  if (minutes <= 0) {
-    throw new TypeError("Log at least one minute.")
-  }
-
-  return minutes
-}
-
-function normalizeLocalDate(value: unknown) {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new TypeError("Select a valid worklog date.")
-  }
-
-  const [year, month, day] = value.split("-").map(Number)
-  const date = new Date(year, month - 1, day)
-
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    throw new TypeError("Select a valid worklog date.")
-  }
-
-  return { year, month, day, value }
-}
-
-function normalizeStartedTime(value: unknown) {
-  if (value === undefined || value === null || value === "") {
-    const now = new Date()
-
-    return {
-      hours: now.getHours(),
-      minutes: now.getMinutes(),
-      seconds: now.getSeconds(),
-      milliseconds: now.getMilliseconds(),
-    }
-  }
-
-  if (typeof value !== "string") {
-    throw new TypeError("Select a valid started time.")
-  }
-
-  const match = value.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/)
-
-  if (!match) {
-    throw new TypeError("Select a valid started time.")
-  }
-
-  const hours = Number(match[1])
-  const minutes = Number(match[2])
-  const seconds = match[3] ? Number(match[3]) : 0
-
-  if (hours > 23 || minutes > 59 || seconds > 59) {
-    throw new TypeError("Select a valid started time.")
-  }
-
-  return { hours, minutes, seconds, milliseconds: 0 }
-}
-
-function normalizeOptionalText(value: unknown, maxLength: number) {
-  if (value === undefined || value === null) {
-    return undefined
-  }
-
-  if (typeof value !== "string") {
-    throw new TypeError("Enter valid text.")
-  }
-
-  const text = value.trim()
-
-  if (!text) {
-    return undefined
-  }
-
-  return text.slice(0, maxLength)
-}
-
 function normalizeJiraSettings(value: unknown): JiraSettingsInput {
   if (!isRecord(value)) {
     throw new TypeError("Enter Jira settings.")
   }
 
   return {
-    host: normalizeHost(value.host),
+    host: normalizeJiraHost(value.host),
     email: normalizeEmail(value.email),
     token: normalizeToken(value.token),
   }
-}
-
-function normalizeCreateWorklogInput(
-  value: unknown
-): NormalizedCreateWorklogInput {
-  if (!isRecord(value)) {
-    throw new TypeError("Enter worklog details.")
-  }
-
-  const issueKey = normalizeIssueKey(value.issueKey)
-  const minutes = normalizePositiveMinutes(value.minutes)
-  const date = normalizeLocalDate(value.date)
-  const time = normalizeStartedTime(value.startedTime)
-  const ticketTitle = normalizeOptionalText(value.ticketTitle, 500)
-  const note = normalizeOptionalText(value.note, 32_767)
-
-  return {
-    issueKey,
-    ticketTitle,
-    minutes,
-    date: date.value,
-    started: new Date(
-      date.year,
-      date.month - 1,
-      date.day,
-      time.hours,
-      time.minutes,
-      time.seconds,
-      time.milliseconds
-    ),
-    note,
-  }
-}
-
-function basicAuthValue(email: string, token: string) {
-  const bytes = new TextEncoder().encode(`${email}:${token}`)
-  let value = ""
-
-  for (const byte of bytes) {
-    value += String.fromCharCode(byte)
-  }
-
-  return `Basic ${btoa(value)}`
-}
-
-function jiraHeaders(settings: JiraSettingsInput) {
-  return {
-    accept: "application/json",
-    authorization: basicAuthValue(settings.email, settings.token),
-  }
-}
-
-class JiraHttpError extends Error {
-  constructor(
-    message: string,
-    readonly status: number
-  ) {
-    super(message)
-    this.name = "JiraHttpError"
-  }
-}
-
-function retryAfterMessage(value: string | null) {
-  if (!value) {
-    return "Try again in a minute."
-  }
-
-  const seconds = Number(value)
-
-  if (Number.isFinite(seconds) && seconds > 0) {
-    return `Try again in ${Math.ceil(seconds)} seconds.`
-  }
-
-  const date = Date.parse(value)
-
-  if (Number.isFinite(date)) {
-    const secondsFromNow = Math.max(1, Math.ceil((date - Date.now()) / 1000))
-
-    return `Try again in ${secondsFromNow} seconds.`
-  }
-
-  return "Try again in a minute."
-}
-
-function jiraError(response: Response, action: string) {
-  if (response.status === 401 || response.status === 403) {
-    return new JiraHttpError(
-      "Jira rejected the saved credentials or you do not have permission.",
-      response.status
-    )
-  }
-
-  if (response.status === 429) {
-    return new JiraHttpError(
-      `Jira rate-limited this request while ${action}. ${retryAfterMessage(
-        response.headers.get("retry-after")
-      )}`,
-      response.status
-    )
-  }
-
-  return new JiraHttpError(
-    `Jira returned ${response.status} while ${action}.`,
-    response.status
-  )
-}
-
-function isTerminalJiraError(error: unknown) {
-  return error instanceof JiraHttpError && [401, 403, 429].includes(error.status)
 }
 
 function bestAvatarUrl(profile: JiraProfile) {
@@ -582,21 +282,11 @@ function applyProfile(
 
 async function verifyJiraSettings(value: unknown): Promise<StoredJiraSettings> {
   const settings = normalizeJiraSettings(value)
-  let response: Response
-
-  try {
-    response = await fetch(`https://${settings.host}/rest/api/3/myself`, {
-      headers: jiraHeaders(settings),
-    })
-  } catch {
-    throw new Error(
-      "Could not reach Jira. Check the site URL and your network."
-    )
-  }
-
-  if (!response.ok) {
-    throw jiraError(response, "verifying credentials")
-  }
+  const response = await jiraClient.request(settings, "/rest/api/3/myself", {
+    action: "verifying credentials",
+    networkErrorMessage:
+      "Could not reach Jira. Check the site URL and your network.",
+  })
 
   const profile = await response.json().catch(() => null)
   const verified = applyProfile(
@@ -918,6 +608,7 @@ function showReminderNotification(reminder: AppReminder) {
 
   const notification = new Notification("Log your Jira time", {
     body: `Reminder scheduled for ${reminder.time}.`,
+    icon: appIconDataUrl,
     tag: `jira-tracking-reminder-${reminder.id}`,
   })
 
@@ -976,13 +667,9 @@ async function getRequiredStoredJiraSettings() {
 }
 
 async function fetchJiraProfile(settings: StoredJiraSettings) {
-  const response = await fetch(`https://${settings.host}/rest/api/3/myself`, {
-    headers: jiraHeaders(settings),
+  const response = await jiraClient.request(settings, "/rest/api/3/myself", {
+    action: "loading your profile",
   })
-
-  if (!response.ok) {
-    throw jiraError(response, "loading your profile")
-  }
 
   const profile = await response.json().catch(() => null)
   const refreshed = applyProfile(
@@ -1024,11 +711,9 @@ async function jiraSearch(
   url.searchParams.set("maxResults", String(limit))
   url.searchParams.set("fields", "summary,updated")
 
-  const response = await fetch(url, { headers: jiraHeaders(settings) })
-
-  if (!response.ok) {
-    throw jiraError(response, "loading issues")
-  }
+  const response = await jiraClient.request(settings, url, {
+    action: "loading issues",
+  })
 
   const data = (await response.json()) as JiraSearchResponse
 
@@ -1046,11 +731,9 @@ async function jiraSearchIssues(
   url.searchParams.set("maxResults", String(limit))
   url.searchParams.set("fields", fields)
 
-  const response = await fetch(url, { headers: jiraHeaders(settings) })
-
-  if (!response.ok) {
-    throw jiraError(response, "loading issues")
-  }
+  const response = await jiraClient.request(settings, url, {
+    action: "loading issues",
+  })
 
   const data = (await response.json()) as JiraSearchResponse
 
@@ -1096,10 +779,7 @@ async function mapWithConcurrency<T, R>(
   }
 
   await Promise.all(
-    Array.from(
-      { length: Math.min(concurrency, values.length) },
-      () => worker()
-    )
+    Array.from({ length: Math.min(concurrency, values.length) }, () => worker())
   )
 
   return results
@@ -1215,11 +895,9 @@ async function fetchIssueWorklogs(
     url.searchParams.set("startAt", String(startAt))
     url.searchParams.set("maxResults", "100")
 
-    const response = await fetch(url, { headers: jiraHeaders(settings) })
-
-    if (!response.ok) {
-      throw jiraError(response, `loading worklogs for ${issueKey}`)
-    }
+    const response = await jiraClient.request(settings, url, {
+      action: `loading worklogs for ${issueKey}`,
+    })
 
     const data = (await response.json()) as JiraWorklogResponse
     worklogs.push(...(data.worklogs ?? []))
@@ -1251,37 +929,6 @@ function jiraDate(value: Date) {
   return `${year}-${month}-${day}`
 }
 
-function worklogCommentText(comment: unknown): string | undefined {
-  if (typeof comment === "string") {
-    return comment || undefined
-  }
-
-  if (!isRecord(comment)) {
-    return undefined
-  }
-
-  const parts: string[] = []
-  const visit = (value: unknown) => {
-    if (!isRecord(value)) {
-      return
-    }
-
-    if (typeof value.text === "string") {
-      parts.push(value.text)
-    }
-
-    if (Array.isArray(value.content)) {
-      for (const child of value.content) {
-        visit(child)
-      }
-    }
-  }
-
-  visit(comment)
-
-  return parts.join(" ").trim() || undefined
-}
-
 async function searchWorklogIssues(
   settings: StoredJiraSettings,
   range: WorklogRange
@@ -1302,11 +949,9 @@ async function searchWorklogIssues(
       url.searchParams.set("nextPageToken", nextPageToken)
     }
 
-    const response = await fetch(url, { headers: jiraHeaders(settings) })
-
-    if (!response.ok) {
-      throw jiraError(response, "searching monthly worklogs")
-    }
+    const response = await jiraClient.request(settings, url, {
+      action: "searching monthly worklogs",
+    })
 
     const data = (await response.json()) as JiraSearchResponse
     issues.push(...(data.issues ?? []))
@@ -1374,18 +1019,14 @@ async function createJiraWorklog(
   const url = `https://${settings.host}/rest/api/3/issue/${encodeURIComponent(input.issueKey)}/worklog`
   const body = jiraWorklogPayload(input)
 
-  const response = await fetch(url, {
+  const response = await jiraClient.request(settings, url, {
+    action: "creating the worklog",
     method: "POST",
     headers: {
-      ...jiraHeaders(settings),
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
   })
-
-  if (!response.ok) {
-    throw jiraError(response, "creating the worklog")
-  }
 
   const created = (await response.json().catch(() => null)) as unknown
 
@@ -1427,20 +1068,15 @@ function searchJiraTickets(settings: StoredJiraSettings, query: string) {
   return jiraSearch(settings, jql)
 }
 
-function decodeBase64(value: string) {
-  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0))
-}
+function pngDataUrl(bytes: Uint8Array) {
+  const chunkSize = 0x8000
+  let binary = ""
 
-function jsonResponse(value: unknown, init: ResponseInit = {}) {
-  const headers = new Headers(init.headers)
-  headers.set("content-type", "application/json; charset=utf-8")
-  headers.set("cache-control", "no-store")
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
+  }
 
-  return new Response(JSON.stringify(value), { ...init, headers })
-}
-
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Could not connect to Jira."
+  return `data:image/png;base64,${btoa(binary)}`
 }
 
 async function handleJiraSettingsApi(request: Request) {
@@ -1713,95 +1349,20 @@ function localUrl(path = "/") {
   return `http://127.0.0.1:${port}${path}`
 }
 
-function contentType(pathname: string) {
-  const extension = pathname.match(/\.[^.]+$/)?.[0]
-
-  return extension ? mimeTypes[extension] : undefined
-}
-
-async function readDistFile(pathname: string) {
-  const safePath = pathname.replace(/^\/+/, "")
-  const fileUrl = new URL(safePath || "index.html", distRoot)
-
-  if (!fileUrl.href.startsWith(distRoot.href)) {
-    return null
-  }
-
-  try {
-    return await Deno.readFile(fileUrl)
-  } catch (error) {
-    if (error instanceof Deno.errors.NotFound) {
-      return null
-    }
-
-    throw error
-  }
-}
-
-async function serveApp(request: Request) {
-  const url = new URL(request.url)
-  const pathname = decodeURIComponent(url.pathname)
-
-  if (pathname === JIRA_SETTINGS_API_PATH) {
-    return handleJiraSettingsApi(request)
-  }
-
-  if (pathname === APP_SETTINGS_API_PATH) {
-    return handleAppSettingsApi(request)
-  }
-
-  if (pathname === LAUNCH_AT_LOGIN_API_PATH) {
-    return handleLaunchAtLoginApi(request)
-  }
-
-  if (pathname === NOTIFICATIONS_API_PATH) {
-    return handleNotificationsApi(request)
-  }
-
-  if (pathname === SHORTCUT_API_PATH) {
-    return handleShortcutApi(request)
-  }
-
-  if (pathname === JIRA_PROFILE_API_PATH) {
-    return handleJiraProfileApi(request)
-  }
-
-  if (pathname === JIRA_ISSUES_API_PATH) {
-    return handleJiraIssuesApi(request)
-  }
-
-  if (pathname === JIRA_WORKLOGS_API_PATH) {
-    return handleJiraWorklogsApi(request)
-  }
-
-  if (pathname === JIRA_REFRESH_API_PATH) {
-    return handleJiraRefreshApi(request)
-  }
-
-  const assetPath = pathname === "/" ? "index.html" : pathname
-  const asset = await readDistFile(assetPath)
-
-  if (asset) {
-    return new Response(asset, {
-      headers: {
-        "content-type": contentType(assetPath) ?? "application/octet-stream",
-      },
-    })
-  }
-
-  const index = await readDistFile("index.html")
-
-  if (!index) {
-    return new Response("Run `npm run build` before starting Deno Desktop.", {
-      status: 500,
-      headers: { "content-type": "text/plain; charset=utf-8" },
-    })
-  }
-
-  return new Response(index, {
-    headers: { "content-type": mimeTypes[".html"] },
-  })
-}
+const serveApp = createRouteHandler({
+  routes: [
+    { path: desktopApiPaths.jiraSettings, handler: handleJiraSettingsApi },
+    { path: desktopApiPaths.appSettings, handler: handleAppSettingsApi },
+    { path: desktopApiPaths.launchAtLogin, handler: handleLaunchAtLoginApi },
+    { path: desktopApiPaths.notifications, handler: handleNotificationsApi },
+    { path: desktopApiPaths.shortcut, handler: handleShortcutApi },
+    { path: desktopApiPaths.jiraProfile, handler: handleJiraProfileApi },
+    { path: desktopApiPaths.jiraIssues, handler: handleJiraIssuesApi },
+    { path: desktopApiPaths.jiraWorklogs, handler: handleJiraWorklogsApi },
+    { path: desktopApiPaths.jiraRefresh, handler: handleJiraRefreshApi },
+  ],
+  staticHandler: (pathname) => serveStaticApp(pathname, distRoot),
+})
 
 const server = Deno.serve(serveApp)
 const keepAlive = setInterval(() => {}, 60_000)
@@ -1813,13 +1374,21 @@ const keeperWindow = new Deno.BrowserWindow({
   x: -10_000,
   y: -10_000,
   frameless: true,
+  noActivate: true,
   resizable: false,
 })
 
+function parkKeeperWindow() {
+  keeperWindow.setPosition(-10_000, -10_000)
+  keeperWindow.show()
+}
+
+parkKeeperWindow()
+
 const tray = new Deno.Tray()
 
-tray.setIcon(decodeBase64(TRAY_ICON_LIGHT))
-tray.setIconDark(decodeBase64(TRAY_ICON_DARK))
+tray.setIcon(trayIcon)
+tray.setIconDark(trayIcon)
 tray.setTooltip("Jira-Tracking")
 console.log(`[desktop] tray id: ${tray.trayId}`)
 
@@ -1835,6 +1404,7 @@ function notifyUpdateReady(version: string) {
 
   const notification = new Notification("Jira-Tracking update ready", {
     body: `Version ${version} will install after restarting the app.`,
+    icon: appIconDataUrl,
     tag: "jira-tracking-update-ready",
   })
 
@@ -1842,8 +1412,15 @@ function notifyUpdateReady(version: string) {
 }
 
 function startAutoUpdate() {
+  if (DISABLE_AUTO_UPDATE) {
+    console.log("[desktop] auto-update disabled by startup flag")
+    return
+  }
+
   if (Deno.desktopVersion === null) {
-    console.log("[desktop] auto-update disabled outside packaged desktop builds")
+    console.log(
+      "[desktop] auto-update disabled outside packaged desktop builds"
+    )
     return
   }
 
@@ -1858,129 +1435,7 @@ function startAutoUpdate() {
   })
 }
 
-function parkStartupWindow() {
-  keeperWindow.setPosition(-10_000, -10_000)
-  keeperWindow.show()
-}
-
-parkStartupWindow()
-
-let panelWindow: Deno.BrowserWindow | null = null
 let isQuitting = false
-
-interface TrayBounds {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-function trayBounds(): TrayBounds | null {
-  const candidate = tray as unknown as { getBounds?: () => TrayBounds }
-
-  try {
-    return candidate.getBounds?.() ?? null
-  } catch {
-    return null
-  }
-}
-
-function positionPanelWindow(window: Deno.BrowserWindow) {
-  const bounds = trayBounds()
-
-  if (!bounds) {
-    window.setPosition(80, 80)
-    return
-  }
-
-  const x = Math.max(
-    8,
-    Math.round(bounds.x + bounds.width / 2 - PANEL_WIDTH / 2)
-  )
-  const belowY = bounds.y + bounds.height + 8
-  const aboveY = bounds.y - PANEL_HEIGHT - 8
-  const y = aboveY > 8 ? aboveY : belowY
-
-  window.setPosition(x, Math.max(8, y))
-}
-
-function hidePanelWindow() {
-  if (panelWindow && !panelWindow.isClosed() && panelWindow.isVisible()) {
-    panelWindow.hide()
-  }
-}
-
-function createPanelWindow() {
-  const window = new Deno.BrowserWindow({
-    title: "Jira-Tracking",
-    x: -10_000,
-    y: -10_000,
-    width: PANEL_WIDTH,
-    height: PANEL_HEIGHT,
-    alwaysOnTop: true,
-    frameless: true,
-    resizable: false,
-  })
-
-  window.navigate(localUrl("/panel"))
-  window.addEventListener("blur", () => {
-    setTimeout(() => {
-      if (panelWindow === window) {
-        hidePanelWindow()
-      }
-    }, 120)
-  })
-  window.addEventListener("close", (event) => {
-    if (isQuitting) {
-      panelWindow = null
-      return
-    }
-
-    event.preventDefault()
-    hidePanelWindow()
-  })
-
-  return window
-}
-
-function showPanelWindow() {
-  if (!panelWindow || panelWindow.isClosed()) {
-    panelWindow = createPanelWindow()
-  }
-
-  positionPanelWindow(panelWindow)
-  panelWindow.show()
-  panelWindow.focus()
-}
-
-function togglePanelWindow() {
-  if (panelWindow && !panelWindow.isClosed() && panelWindow.isVisible()) {
-    hidePanelWindow()
-  } else {
-    showPanelWindow()
-  }
-}
-
-keeperWindow.addEventListener("close", (event) => {
-  if (tray.trayId !== 0) {
-    event.preventDefault()
-    parkStartupWindow()
-  }
-})
-
-if (tray.trayId === 0) {
-  console.warn("[desktop] no tray icon available, showing fallback window")
-  showPanelWindow()
-} else {
-  if (!SHOW_PANEL_ON_START) {
-    Deno.dock.setVisible(false)
-  }
-}
-
-if (tray.trayId !== 0 && (SHOW_PANEL_ON_START || !(await loadJiraSettings()))) {
-  console.log("[desktop] showing panel window")
-  showPanelWindow()
-}
 
 tray.setMenu([
   { item: { label: "Show / Hide", id: "toggle", enabled: true } },
@@ -2006,9 +1461,91 @@ tray.addEventListener("menuclick", (event) => {
   }
 })
 
+let panelWindow: Deno.BrowserWindow | null = null
+let panelWindowVisible = false
+
+keeperWindow.addEventListener("close", (event) => {
+  if (isQuitting) {
+    return
+  }
+
+  event.preventDefault()
+  parkKeeperWindow()
+})
+
+function hidePanelWindow() {
+  if (!panelWindow || !panelWindowVisible) {
+    return
+  }
+
+  panelWindow.hide()
+  panelWindowVisible = false
+  console.log("[desktop] panel hidden")
+}
+
+function createPanelWindow() {
+  const window = new Deno.BrowserWindow({
+    title: "Jira-Tracking",
+    x: 80,
+    y: 80,
+    width: PANEL_WIDTH,
+    height: PANEL_HEIGHT,
+    resizable: true,
+  })
+
+  window.navigate(localUrl("/panel"))
+  window.addEventListener("close", () => {
+    if (panelWindow === window) {
+      window.hide()
+      panelWindowVisible = false
+      console.log("[desktop] panel soft-closed")
+    }
+  })
+
+  return window
+}
+
+function showPanelWindow() {
+  if (!panelWindow) {
+    panelWindow = createPanelWindow()
+  }
+
+  panelWindow.show()
+  panelWindow.focus()
+  panelWindowVisible = true
+
+  const [x, y] = panelWindow.getPosition()
+  const [width, height] = panelWindow.getSize()
+  console.log(
+    `[desktop] panel visible=${panelWindow.isVisible()} position=${x},${y} size=${width}x${height}`
+  )
+}
+
+function togglePanelWindow() {
+  if (panelWindowVisible) {
+    hidePanelWindow()
+  } else {
+    showPanelWindow()
+  }
+}
+
 tray.addEventListener("click", () => {
   togglePanelWindow()
 })
+
+if (tray.trayId === 0) {
+  console.warn("[desktop] no tray icon available, showing fallback window")
+  showPanelWindow()
+} else {
+  if (!SHOW_PANEL_ON_START) {
+    Deno.dock.setVisible(false)
+  }
+}
+
+if (tray.trayId !== 0 && SHOW_PANEL_ON_START) {
+  console.log("[desktop] showing panel window")
+  showPanelWindow()
+}
 
 Deno.dock.addEventListener("reopen", (event) => {
   if (!event.detail.hasVisibleWindows) {
@@ -2024,6 +1561,7 @@ Object.assign(globalThis, {
   __jiraTrackingDesktop: {
     keepAlive,
     keeperWindow,
+    panelWindow,
     reminderTimers,
     server,
     tray,

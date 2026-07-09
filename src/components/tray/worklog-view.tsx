@@ -5,32 +5,27 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { SectionLabel } from "@/components/tray/section-label"
 import { projectMetaFor, type WorkLog } from "@/data/domain"
 import { getDesktopBindings } from "@/desktop-bindings"
-import { formatDuration, formatTimeOfDay, relativeDayLabel } from "@/lib/time"
-
-const projectOf = (key: string) => key.split("-")[0] || "JIRA"
-
-function groupByDay(logs: WorkLog[]) {
-  const map = new Map<string, WorkLog[]>()
-  for (const log of logs) {
-    const label = relativeDayLabel(log.startedAt)
-    const arr = map.get(label) ?? []
-    arr.push(log)
-    map.set(label, arr)
-  }
-  return [...map.entries()]
-}
+import { projectKeyFromIssueKey } from "@/domain/jira"
+import { groupWorklogsByDay } from "@/domain/time-tracking"
+import { formatDuration, formatTimeOfDay } from "@/lib/time"
 
 /**
  * Second view: a reverse-chronological worklog grouped by day. Uniform
  * two-line rows keep it calm — title + duration up top, "key · time · note"
  * underneath, with edit/delete revealed on hover.
  */
-export function WorklogView({ refreshKey = 0 }: { refreshKey?: number }) {
+export function WorklogView({
+  jiraHost,
+  refreshKey = 0,
+}: {
+  jiraHost?: string
+  refreshKey?: number
+}) {
   const desktopBindings = React.useMemo(() => getDesktopBindings(), [])
   const [logs, setLogs] = React.useState<WorkLog[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
-  const groups = React.useMemo(() => groupByDay(logs), [logs])
+  const groups = React.useMemo(() => groupWorklogsByDay(logs), [logs])
 
   React.useEffect(() => {
     if (!desktopBindings) {
@@ -90,7 +85,11 @@ export function WorklogView({ refreshKey = 0 }: { refreshKey?: number }) {
                     </SectionLabel>
                     <div className="flex flex-col">
                       {dayLogs.map((log) => (
-                        <WorklogRow key={log.id} log={log} />
+                        <WorklogRow
+                          key={log.id}
+                          log={log}
+                          jiraHost={jiraHost}
+                        />
                       ))}
                     </div>
                   </div>
@@ -103,9 +102,12 @@ export function WorklogView({ refreshKey = 0 }: { refreshKey?: number }) {
   )
 }
 
-function WorklogRow({ log }: { log: WorkLog }) {
-  const project = projectOf(log.ticketKey)
+function WorklogRow({ log, jiraHost }: { log: WorkLog; jiraHost?: string }) {
+  const project = projectKeyFromIssueKey(log.ticketKey)
   const meta = projectMetaFor(project)
+  const jiraUrl = jiraHost
+    ? `https://${jiraHost}/browse/${encodeURIComponent(log.ticketKey)}`
+    : undefined
 
   return (
     <div className="group/log flex flex-col gap-0.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-muted/70">
@@ -121,14 +123,22 @@ function WorklogRow({ log }: { log: WorkLog }) {
 
       {/* line 2: key · time · note — actions swap in on hover */}
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] font-medium tracking-tight text-foreground/70">
-          <span
-            aria-hidden
-            className="size-1.5 rounded-full"
-            style={{ backgroundColor: meta.tint }}
-          />
-          {log.ticketKey}
-        </span>
+        {jiraUrl ? (
+          <a
+            href={jiraUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-1 rounded-sm font-mono text-[11px] font-medium tracking-tight text-foreground/70 underline-offset-2 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            <TicketDot tint={meta.tint} />
+            {log.ticketKey}
+          </a>
+        ) : (
+          <span className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] font-medium tracking-tight text-foreground/70">
+            <TicketDot tint={meta.tint} />
+            {log.ticketKey}
+          </span>
+        )}
         <Sep />
         <span className="shrink-0 font-mono tabular-nums">
           {formatTimeOfDay(log.startedAt)}
@@ -141,6 +151,16 @@ function WorklogRow({ log }: { log: WorkLog }) {
         ) : null}
       </div>
     </div>
+  )
+}
+
+function TicketDot({ tint }: { tint: string }) {
+  return (
+    <span
+      aria-hidden
+      className="size-1.5 rounded-full"
+      style={{ backgroundColor: tint }}
+    />
   )
 }
 

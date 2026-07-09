@@ -26,6 +26,7 @@ import {
   type AppSettingsInput,
   type SavedJiraSettings,
 } from "@/desktop-bindings"
+import { initialsFromName } from "@/domain/user"
 import { cn } from "@/lib/utils"
 
 type ConnectionUser = {
@@ -47,6 +48,7 @@ export function SettingsScreen({
   const [appSettings, setAppSettings] = React.useState<AppSettings | null>(null)
   const [saving, setSaving] = React.useState(false)
   const [disconnecting, setDisconnecting] = React.useState(false)
+  const settingsSaveVersion = React.useRef(0)
 
   React.useEffect(() => {
     let cancelled = false
@@ -78,9 +80,9 @@ export function SettingsScreen({
 
   const saveAppSettings = async (next: AppSettingsInput) => {
     const desktopBindings = getDesktopBindings()
+    const saveVersion = ++settingsSaveVersion.current
 
     if (!desktopBindings) {
-      setAppSettings((current) => (current ? { ...current, ...next } : current))
       return
     }
 
@@ -88,13 +90,17 @@ export function SettingsScreen({
 
     try {
       const saved = await desktopBindings.saveAppSettings(next)
-      setAppSettings(saved)
+      if (saveVersion === settingsSaveVersion.current) {
+        setAppSettings(saved)
+      }
     } catch (error) {
       toast.error("Settings were not saved", {
         description: error instanceof Error ? error.message : String(error),
       })
     } finally {
-      setSaving(false)
+      if (saveVersion === settingsSaveVersion.current) {
+        setSaving(false)
+      }
     }
   }
 
@@ -103,7 +109,7 @@ export function SettingsScreen({
       return
     }
 
-    void saveAppSettings({
+    const next = {
       remindersEnabled: appSettings.remindersEnabled,
       notificationsEnabled: appSettings.notificationsEnabled,
       reminders: appSettings.reminders,
@@ -112,7 +118,10 @@ export function SettingsScreen({
       cacheTtlMinutes: appSettings.cacheTtlMinutes,
       updatedAt: appSettings.updatedAt,
       ...patch,
-    })
+    }
+
+    setAppSettings((current) => (current ? { ...current, ...next } : current))
+    void saveAppSettings(next)
   }
 
   const toggleNotifications = async (enabled: boolean) => {
@@ -367,14 +376,6 @@ function connectionUserFromSettings(
     initials: initialsFromName(name),
     avatarUrl: settings.avatarUrl,
   }
-}
-
-function initialsFromName(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  const initials =
-    parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : name.slice(0, 2)
-
-  return initials.toUpperCase()
 }
 
 function ThemeRow() {

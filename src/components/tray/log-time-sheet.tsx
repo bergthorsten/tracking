@@ -5,33 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { projectMetaFor, type Ticket, type WorkLog } from "@/data/domain"
+import {
+  isValidLocalDateInput,
+  localDateInputValue,
+} from "@/domain/time-tracking"
 import { formatDuration, formatTimeOfDay, STEP_MINUTES } from "@/lib/time"
 import { cn } from "@/lib/utils"
 
 const PRESETS = [15, 30, 45, 60, 120]
-
-function localDateInputValue(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-
-  return `${year}-${month}-${day}`
-}
-
-function isValidDateInput(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false
-  }
-
-  const [year, month, day] = value.split("-").map(Number)
-  const date = new Date(year, month - 1, day)
-
-  return (
-    date.getFullYear() === year &&
-    date.getMonth() === month - 1 &&
-    date.getDate() === day
-  )
-}
 
 /**
  * Full-cover, in-popover sheet for logging time against one ticket.
@@ -64,7 +45,7 @@ export function LogTimeSheet({
   const [date, setDate] = React.useState(() => localDateInputValue(new Date()))
 
   const meta = projectMetaFor(ticket.project)
-  const dateIsValid = isValidDateInput(date)
+  const dateIsValid = isValidLocalDateInput(date)
   const canSubmit =
     minutes > 0 && dateIsValid && !submitDisabledReason && !submitting
 

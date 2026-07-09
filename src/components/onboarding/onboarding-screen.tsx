@@ -6,7 +6,6 @@ import {
   EyeOff,
   ExternalLink,
   LoaderCircle,
-  Timer,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -73,9 +72,11 @@ export function OnboardingScreen({ onDone, onConnect }: OnboardingScreenProps) {
     <div className="flex h-full flex-col justify-center bg-background px-6 py-8">
       {/* Brand */}
       <div className="mb-6 flex flex-col items-center gap-2.5 text-center">
-        <div className="flex size-11 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-sm">
-          <Timer className="size-5" />
-        </div>
+        <img
+          src="/logo.png"
+          alt=""
+          className="size-12 rounded-2xl shadow-sm"
+        />
         <div>
           <h1 className="text-base font-semibold">Connect to Jira</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">

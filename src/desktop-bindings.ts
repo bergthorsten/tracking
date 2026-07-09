@@ -1,85 +1,30 @@
-export interface JiraSettingsInput {
-  host: string
-  email: string
-  token: string
-}
+import {
+  desktopApiPaths,
+  type AppSettings,
+  type AppSettingsInput,
+  type CreateJiraWorklogInput,
+  type FeatureStatus,
+  type JiraSettingsInput,
+  type JiraTicket,
+  type JiraWorklog,
+  type JiraWorklogResult,
+  type SavedJiraSettings,
+  type ShortcutResult,
+} from "./contracts/desktop-api"
 
-export interface SavedJiraSettings {
-  host: string
-  email: string
-  accountId?: string
-  avatarUrl?: string
-  displayName?: string
-  updatedAt: string
-}
-
-export interface JiraTicket {
-  key: string
-  title: string
-  project: string
-  todayMinutes: number
-  lastWorked: string
-}
-
-export interface JiraWorklog {
-  id: string
-  ticketKey: string
-  ticketTitle: string
-  minutes: number
-  startedAt: string
-  description?: string
-}
-
-export interface JiraWorklogResult {
-  month: string
-  totalMinutes: number
-  logs: JiraWorklog[]
-}
-
-export interface CreateJiraWorklogInput {
-  issueKey: string
-  ticketTitle?: string
-  minutes: number
-  date: string
-  note?: string
-}
-
-export interface AppReminder {
-  id: string
-  time: string
-  days: boolean[]
-  enabled: boolean
-}
-
-export interface FeatureStatus {
-  supported: boolean
-  enabled?: boolean
-  permission?: NotificationPermission | "unsupported"
-  registered?: boolean
-  message?: string
-}
-
-export interface AppSettings {
-  remindersEnabled: boolean
-  notificationsEnabled: boolean
-  reminders: AppReminder[]
-  launchAtLogin: boolean
-  globalShortcut: string
-  cacheTtlMinutes: number
-  updatedAt: string
-  native: {
-    launchAtLogin: FeatureStatus
-    notifications: FeatureStatus
-    globalShortcut: FeatureStatus
-  }
-}
-
-export type AppSettingsInput = Omit<AppSettings, "native">
-
-export interface ShortcutResult {
-  shortcut: string
-  status: FeatureStatus
-}
+export type {
+  AppReminder,
+  AppSettings,
+  AppSettingsInput,
+  CreateJiraWorklogInput,
+  FeatureStatus,
+  JiraSettingsInput,
+  JiraTicket,
+  JiraWorklog,
+  JiraWorklogResult,
+  SavedJiraSettings,
+  ShortcutResult,
+} from "./contracts/desktop-api"
 
 export interface DesktopBindings {
   loadJiraSettings(): Promise<SavedJiraSettings | null>
@@ -100,15 +45,17 @@ export interface DesktopBindings {
   refreshJiraData(): Promise<void>
 }
 
-const jiraSettingsEndpoint = "/api/jira-settings"
-const appSettingsEndpoint = "/api/app-settings"
-const jiraProfileEndpoint = "/api/jira-profile"
-const jiraIssuesEndpoint = "/api/jira-issues"
-const jiraWorklogsEndpoint = "/api/jira-worklogs"
-const jiraRefreshEndpoint = "/api/jira-refresh"
-const launchAtLoginEndpoint = "/api/launch-at-login"
-const notificationsEndpoint = "/api/notifications"
-const shortcutEndpoint = "/api/shortcut"
+const {
+  jiraSettings: jiraSettingsEndpoint,
+  appSettings: appSettingsEndpoint,
+  jiraProfile: jiraProfileEndpoint,
+  jiraIssues: jiraIssuesEndpoint,
+  jiraWorklogs: jiraWorklogsEndpoint,
+  jiraRefresh: jiraRefreshEndpoint,
+  launchAtLogin: launchAtLoginEndpoint,
+  notifications: notificationsEndpoint,
+  shortcut: shortcutEndpoint,
+} = desktopApiPaths
 
 const httpDesktopBindings: DesktopBindings = {
   loadJiraSettings: () =>
