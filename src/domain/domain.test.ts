@@ -218,7 +218,6 @@ describe("normalizeAppSettings", () => {
           },
         ],
         launchAtLogin: true,
-        globalShortcut: "CmdOrCtrl+Shift+L",
         cacheTtlMinutes: 120,
       },
       now
@@ -228,27 +227,19 @@ describe("normalizeAppSettings", () => {
       remindersEnabled: false,
       notificationsEnabled: true,
       launchAtLogin: true,
-      globalShortcut: "CmdOrCtrl+Shift+L",
       cacheTtlMinutes: 60,
       updatedAt: now.toISOString(),
     })
     expect(settings.reminders).toHaveLength(1)
   })
 
-  it("rejects invalid reminder times and shortcuts", () => {
+  it("rejects invalid reminder times", () => {
     expect(() =>
       normalizeAppSettings({
         ...defaultAppSettings,
         reminders: [{ ...defaultAppSettings.reminders[0], time: "25:00" }],
       })
     ).toThrow("Enter valid reminder times.")
-
-    expect(() =>
-      normalizeAppSettings({
-        ...defaultAppSettings,
-        globalShortcut: "J",
-      })
-    ).toThrow("Enter a valid shortcut")
   })
 
   it("migrates legacy boolean reminder days to named weekdays", () => {

@@ -1,7 +1,6 @@
 import * as React from "react"
 import {
   ChevronLeft,
-  Keyboard,
   LogOut,
   Monitor,
   Moon,
@@ -11,7 +10,6 @@ import {
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
@@ -278,26 +276,10 @@ export function SettingsScreen({
                 onCheckedChange={toggleLaunchAtLogin}
               />
             </Row>
-
-            <Row
-              icon={<Keyboard className="size-4 text-muted-foreground" />}
-              title="Global shortcut"
-              subtitle={
-                appSettings?.native.globalShortcut.message ||
-                "Show or hide Jira Tracking"
-              }
-            >
-              <Input
-                value={appSettings?.globalShortcut ?? "CmdOrCtrl+Shift+J"}
-                disabled
-                className="h-7 w-36 font-mono text-xs"
-                aria-label="Global shortcut"
-              />
-            </Row>
           </section>
 
           <p className="pt-1 text-center text-[11px] text-muted-foreground">
-            Jira Time Tracker · v0.0.1
+            Jira Time Tracker · v0.0.2
           </p>
         </div>
       </ScrollArea>

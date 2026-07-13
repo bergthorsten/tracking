@@ -15,7 +15,6 @@ export const desktopApiPaths = {
   jiraRefresh: "/api/jira-refresh",
   launchAtLogin: "/api/launch-at-login",
   notifications: "/api/notifications",
-  shortcut: "/api/shortcut",
 } as const
 
 export interface JiraSettingsInput {
@@ -38,6 +37,7 @@ export interface JiraTicket {
   title: string
   project: string
   todayMinutes: number
+  trackedMinutes?: number
   lastWorked: string
 }
 
@@ -80,13 +80,7 @@ export interface PublicAppSettings extends StoredAppSettings {
   native: {
     launchAtLogin: FeatureStatus
     notifications: FeatureStatus
-    globalShortcut: FeatureStatus
   }
 }
 
 export type AppSettingsInput = UpdateAppSettingsInput
-
-export interface ShortcutResult {
-  shortcut: string
-  status: FeatureStatus
-}

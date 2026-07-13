@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 /**
  * A single ticket line. Uniform two-line rhythm keeps the list calm:
  *   line 1 — the title (primary, scannable)
- *   line 2 — colored key · time logged today · last worked
+ *   line 2 — colored key · tracked time · last worked
  * The trailing "+" opens the dedicated log-time sheet.
  */
 export function TicketRow({
@@ -63,11 +63,18 @@ export function TicketRow({
               {ticket.key}
             </span>
           )}
-          {ticket.todayMinutes > 0 ? (
+          {(ticket.trackedMinutes ?? 0) > 0 ? (
             <>
               <Sep />
-              <span className="font-medium text-foreground/70">
-                {formatDuration(ticket.todayMinutes)} today
+              <span
+                className="font-medium text-foreground/70"
+                title={
+                  ticket.todayMinutes > 0
+                    ? `${formatDuration(ticket.todayMinutes)} logged today`
+                    : undefined
+                }
+              >
+                {formatDuration(ticket.trackedMinutes ?? 0)} tracked
               </span>
             </>
           ) : null}

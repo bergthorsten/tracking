@@ -8,6 +8,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
+.env
+jira-tracking-deno-*.json
 dist
 dist-desktop
 dist-ssr

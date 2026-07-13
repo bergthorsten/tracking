@@ -35,7 +35,6 @@ export interface StoredAppSettings {
   notificationsEnabled: boolean
   reminders: AppReminder[]
   launchAtLogin: boolean
-  globalShortcut: string
   cacheTtlMinutes: number
   updatedAt: string
 }
@@ -60,7 +59,6 @@ export const defaultAppSettings: StoredAppSettings = {
     },
   ],
   launchAtLogin: false,
-  globalShortcut: "CmdOrCtrl+Shift+J",
   cacheTtlMinutes: DEFAULT_CACHE_TTL_MINUTES,
   updatedAt: new Date(0).toISOString(),
 }
@@ -127,24 +125,6 @@ function isWeekday(value: unknown): value is Weekday {
   return weekdays.some((weekday) => weekday.value === value)
 }
 
-export function normalizeGlobalShortcut(value: unknown) {
-  if (typeof value !== "string") {
-    throw new TypeError("Enter a valid shortcut.")
-  }
-
-  const shortcut = value.trim()
-
-  if (
-    !/^(CmdOrCtrl|Cmd|Ctrl|Alt|Shift|Super)(\+(CmdOrCtrl|Cmd|Ctrl|Alt|Shift|Super))*\+([A-Z0-9]|F\d{1,2}|Enter|Esc|Up|Down|Left|Right|Tab|Space|Backspace|Delete)$/.test(
-      shortcut
-    )
-  ) {
-    throw new TypeError("Enter a valid shortcut like CmdOrCtrl+Shift+J.")
-  }
-
-  return shortcut
-}
-
 export function normalizeAppSettings(
   value: unknown,
   now = new Date()
@@ -164,10 +144,6 @@ export function normalizeAppSettings(
     notificationsEnabled: value.notificationsEnabled === true,
     reminders: reminders.slice(0, 8),
     launchAtLogin: value.launchAtLogin === true,
-    globalShortcut:
-      value.globalShortcut === undefined
-        ? defaultAppSettings.globalShortcut
-        : normalizeGlobalShortcut(value.globalShortcut),
     cacheTtlMinutes:
       typeof value.cacheTtlMinutes === "number" &&
       Number.isFinite(value.cacheTtlMinutes) &&

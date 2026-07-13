@@ -176,8 +176,16 @@ export function createJiraRepository({
       "status changed by currentUser() OR reporter was in (currentUser()) ORDER BY updatedDate DESC",
       "status changed by currentUser() OR reporter = currentUser() ORDER BY updated DESC",
     ]).catch(() => [])
+    const trackedByKey = new Map(
+      recentTracked.map((ticket) => [ticket.key, ticket])
+    )
+    const boardChangedWithTracking = boardChanged.map(
+      (ticket) => trackedByKey.get(ticket.key) ?? ticket
+    )
 
-    return dedupeTickets([...recentTracked, ...boardChanged]).slice(0, 25)
+    return dedupeTickets([...recentTracked, ...boardChangedWithTracking]).sort(
+      (a, b) => Date.parse(b.lastWorked) - Date.parse(a.lastWorked)
+    )
   }
 
   async function recentTrackedTickets(settings: StoredJiraSettings) {
@@ -219,6 +227,11 @@ export function createJiraRepository({
 
       withLastWorked.push({
         ...toPublicTicket(issue),
+        trackedMinutes: myWorklogs.reduce(
+          (total, worklog) =>
+            total + Math.round((worklog.timeSpentSeconds ?? 0) / 60),
+          0
+        ),
         todayMinutes: myWorklogs.reduce((total, worklog) => {
           const started = new Date(worklog.started ?? "")
 
@@ -232,7 +245,6 @@ export function createJiraRepository({
 
     return withLastWorked
       .sort((a, b) => Date.parse(b.lastWorked) - Date.parse(a.lastWorked))
-      .slice(0, 3)
   }
 
   async function searchJiraTickets(settings: StoredJiraSettings, query: string) {

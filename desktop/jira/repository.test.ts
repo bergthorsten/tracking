@@ -77,6 +77,74 @@ describe("createJiraRepository", () => {
     })
     expect(saved).toMatchObject({ accountId: "abc123" })
   })
+
+  it("includes the current user's tracked time on recent tickets", async () => {
+    const today = new Date()
+    const todayStarted = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      9
+    ).toISOString()
+    const repository = createJiraRepository({
+      client: fakeClient(async (input) => {
+        const url = new URL(String(input))
+
+        if (url.pathname.endsWith("/worklog")) {
+          return Response.json({
+            maxResults: 100,
+            total: 3,
+            worklogs: [
+              {
+                id: "1",
+                author: { accountId: "me" },
+                started: todayStarted,
+                timeSpentSeconds: 30 * 60,
+              },
+              {
+                id: "2",
+                author: { accountId: "me" },
+                started: "2026-06-01T09:00:00.000Z",
+                timeSpentSeconds: 60 * 60,
+              },
+              {
+                id: "3",
+                author: { accountId: "someone-else" },
+                started: todayStarted,
+                timeSpentSeconds: 120 * 60,
+              },
+            ],
+          })
+        }
+
+        if (url.searchParams.get("jql")?.includes("worklogAuthor")) {
+          return Response.json({
+            issues: Array.from({ length: 4 }, (_, index) => ({
+              key: `APP-${index + 1}`,
+              fields: { summary: "Build cache", updated: todayStarted },
+            })),
+          })
+        }
+
+        return Response.json({ issues: [] })
+      }),
+      cache: new JiraDataCache({ loadTtlMs: () => 1_000 }),
+      saveSettings: async () => {},
+    })
+
+    const tickets = await repository.searchTickets(
+      { ...settings, accountId: "me" },
+      ""
+    )
+
+    expect(tickets).toHaveLength(4)
+    expect(tickets[0]).toMatchObject({
+      key: "APP-1",
+      todayMinutes: 30,
+      trackedMinutes: 90,
+      lastWorked: todayStarted,
+    })
+  })
 })
 
 function fakeClient(

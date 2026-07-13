@@ -9,7 +9,6 @@ import {
   defaultAppSettings,
   isRecord,
   normalizeAppSettingsUpdate,
-  normalizeGlobalShortcut,
   parseStoredAppSettings,
   type AppReminder,
   type StoredAppSettings,
@@ -33,10 +32,10 @@ const PANEL_HEIGHT = 600
 const APP_NAME = "Jira-Tracking"
 const SETTINGS_FILE = "jira-settings.json"
 const APP_SETTINGS_FILE = "app-settings.json"
-const DEFAULT_GLOBAL_SHORTCUT = "CmdOrCtrl+Shift+J"
 const APP_IDENTIFIER = "de.bergfreunde.jira-tracking"
 const SHOW_PANEL_ON_START = Deno.args.includes("--show-panel")
 const DISABLE_AUTO_UPDATE = Deno.args.includes("--disable-auto-update")
+const ENABLE_AUTO_UPDATE = Deno.args.includes("--enable-auto-update")
 
 const distRoot = new URL("../dist/", import.meta.url)
 const appIcon = await Deno.readFile(new URL("logo.png", distRoot))
@@ -81,10 +80,6 @@ const jiraRepository = createJiraRepository({
   saveSettings: saveJiraSettings,
 })
 const reminderTimers = new Map<string, ReturnType<typeof setTimeout>>()
-
-if (defaultAppSettings.globalShortcut !== DEFAULT_GLOBAL_SHORTCUT) {
-  throw new Error("Default shortcut constants are out of sync.")
-}
 
 function isStoredJiraSettings(value: unknown): value is StoredJiraSettings {
   return (
@@ -241,7 +236,6 @@ async function loadAppSettings(): Promise<PublicAppSettings> {
     native: {
       launchAtLogin: await getLaunchAtLoginStatus(),
       notifications: await getNotificationStatus(),
-      globalShortcut: getGlobalShortcutStatus(settings.globalShortcut),
     },
   }
 }
@@ -423,28 +417,6 @@ async function requestNotificationPermission(): Promise<FeatureStatus> {
   })
 
   return status
-}
-
-function getGlobalShortcutStatus(shortcut: string): FeatureStatus {
-  return {
-    supported: false,
-    enabled: false,
-    registered: false,
-    message: `Deno Desktop does not currently expose process-global shortcuts. ${shortcut} is saved for future support.`,
-  }
-}
-
-async function saveGlobalShortcut(value: unknown): Promise<FeatureStatus> {
-  const shortcut = normalizeGlobalShortcut(value)
-  const settings = await readStoredAppSettings()
-
-  await saveStoredAppSettings({
-    ...settings,
-    globalShortcut: shortcut,
-    updatedAt: new Date().toISOString(),
-  })
-
-  return getGlobalShortcutStatus(shortcut)
 }
 
 function clearReminderTimers() {
@@ -654,42 +626,6 @@ async function handleNotificationsApi(request: Request) {
   }
 }
 
-async function handleShortcutApi(request: Request) {
-  if (request.method === "GET") {
-    const settings = await readStoredAppSettings()
-
-    return jsonResponse({
-      shortcut: settings.globalShortcut,
-      status: getGlobalShortcutStatus(settings.globalShortcut),
-    })
-  }
-
-  if (request.method !== "PUT") {
-    return jsonResponse(
-      { message: "Method not allowed." },
-      { status: 405, headers: { allow: "GET, PUT" } }
-    )
-  }
-
-  let input: unknown
-
-  try {
-    input = await request.json()
-  } catch {
-    return jsonResponse({ message: "Enter a shortcut." }, { status: 400 })
-  }
-
-  try {
-    const shortcut = isRecord(input) ? input.shortcut : undefined
-    const status = await saveGlobalShortcut(shortcut)
-    const settings = await readStoredAppSettings()
-
-    return jsonResponse({ shortcut: settings.globalShortcut, status })
-  } catch (error) {
-    return jsonResponse({ message: errorMessage(error) }, { status: 400 })
-  }
-}
-
 async function handleJiraProfileApi(request: Request) {
   if (request.method !== "GET") {
     return jsonResponse(
@@ -808,7 +744,6 @@ const serveApp = createRouteHandler({
     { path: desktopApiPaths.appSettings, handler: handleAppSettingsApi },
     { path: desktopApiPaths.launchAtLogin, handler: handleLaunchAtLoginApi },
     { path: desktopApiPaths.notifications, handler: handleNotificationsApi },
-    { path: desktopApiPaths.shortcut, handler: handleShortcutApi },
     { path: desktopApiPaths.jiraProfile, handler: handleJiraProfileApi },
     { path: desktopApiPaths.jiraIssues, handler: handleJiraIssuesApi },
     { path: desktopApiPaths.jiraWorklogs, handler: handleJiraWorklogsApi },
@@ -867,6 +802,11 @@ function notifyUpdateReady(version: string) {
 function startAutoUpdate() {
   if (DISABLE_AUTO_UPDATE) {
     console.log("[desktop] auto-update disabled by startup flag")
+    return
+  }
+
+  if (!ENABLE_AUTO_UPDATE) {
+    console.log("[desktop] auto-update disabled; no release manifest is published")
     return
   }
 

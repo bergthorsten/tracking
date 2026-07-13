@@ -9,7 +9,6 @@ import {
   type JiraWorklogResult,
   type PublicAppSettings,
   type SavedJiraSettings,
-  type ShortcutResult,
 } from "./contracts/desktop-api"
 
 export type {
@@ -23,7 +22,6 @@ export type {
   JiraWorklogResult,
   PublicAppSettings,
   SavedJiraSettings,
-  ShortcutResult,
 } from "./contracts/desktop-api"
 
 export interface DesktopBindings {
@@ -36,8 +34,6 @@ export interface DesktopBindings {
   setLaunchAtLogin(enabled: boolean): Promise<FeatureStatus>
   getNotificationStatus(): Promise<FeatureStatus>
   requestNotificationPermission(): Promise<FeatureStatus>
-  getShortcut(): Promise<ShortcutResult>
-  setShortcut(shortcut: string): Promise<ShortcutResult>
   loadJiraProfile(): Promise<SavedJiraSettings>
   loadJiraIssues(query?: string): Promise<JiraTicket[]>
   loadJiraWorklogs(month?: string): Promise<JiraWorklogResult>
@@ -54,7 +50,6 @@ const {
   jiraRefresh: jiraRefreshEndpoint,
   launchAtLogin: launchAtLoginEndpoint,
   notifications: notificationsEndpoint,
-  shortcut: shortcutEndpoint,
 } = desktopApiPaths
 
 const httpDesktopBindings: DesktopBindings = {
@@ -86,13 +81,6 @@ const httpDesktopBindings: DesktopBindings = {
     requestDesktop<FeatureStatus>(notificationsEndpoint),
   requestNotificationPermission: () =>
     requestDesktop<FeatureStatus>(notificationsEndpoint, { method: "POST" }),
-  getShortcut: () => requestDesktop<ShortcutResult>(shortcutEndpoint),
-  setShortcut: (shortcut) =>
-    requestDesktop<ShortcutResult>(shortcutEndpoint, {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ shortcut }),
-    }),
   loadJiraProfile: () => requestDesktop<SavedJiraSettings>(jiraProfileEndpoint),
   loadJiraIssues: (query) => {
     const params = new URLSearchParams()

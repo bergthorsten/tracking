@@ -10,7 +10,7 @@ Built with React, TypeScript, Vite, shadcn/ui, Tailwind CSS, and Deno Desktop.
 - Recent ticket lookup and free-text issue search.
 - One-click time logging with selected local date and optional note.
 - Current-month worklog summary and recent worklog list.
-- Persistent app settings for reminders, notifications, launch at login, and shortcut preference.
+- Persistent app settings for reminders, notifications, and launch at login.
 - Native tray/menu-bar panel behavior for macOS, Windows, and Linux builds.
 - Packaged releases for macOS x64/arm64, Windows x64, and Linux x64/arm64.
 
@@ -30,7 +30,7 @@ Choose the artifact for your platform:
 - Linux x64: `Jira-Tracking-*-linux-x64.tar.gz`
 - Linux arm64: `Jira-Tracking-*-linux-arm64.tar.gz`
 
-macOS builds are currently ad-hoc signed by Deno Desktop. For public distribution, Developer ID signing and notarization are still recommended.
+macOS release builds should be Developer ID signed and notarized so Gatekeeper allows smoother first-run installation. See `docs/mac-signing-notarization.md`.
 
 ## First Run
 
@@ -97,6 +97,15 @@ Build all supported targets into architecture-specific folders:
 npm run desktop:package:all
 ```
 
+Build signed and notarized macOS release archives from a trusted Mac:
+
+```bash
+npm run desktop:package:mac
+npm run desktop:publish:mac
+```
+
+Packaging requires Apple signing variables in `.env`; copy `.env.example` and fill in the real values first. Publishing requires `gh` to be authenticated with release write access.
+
 Expected all-target outputs:
 
 ```txt
@@ -105,6 +114,13 @@ dist-desktop/macos-arm64/Jira-Tracking.app
 dist-desktop/windows-x64/Jira-Tracking
 dist-desktop/linux-x64/Jira-Tracking
 dist-desktop/linux-arm64/Jira-Tracking
+```
+
+Expected notarized macOS release outputs:
+
+```txt
+dist-desktop/release/Jira-Tracking-v0.0.2-macos-arm64.zip
+dist-desktop/release/Jira-Tracking-v0.0.2-macos-x64.zip
 ```
 
 `dist` and `dist-desktop` are ignored by git. Release archives should be created from `dist-desktop` and uploaded to GitHub Releases.
@@ -117,7 +133,7 @@ The app is wired to Deno Desktop auto-update with this release URL:
 https://github.com/bergthorsten/tracking/releases/latest/download
 ```
 
-The client checks hourly in packaged desktop builds and stages updates for the next launch. Auto-update requires Deno Desktop `latest.json` manifests and binary patch files to be published with releases. The first public release currently includes full downloadable app archives, but not update patch manifests yet.
+Auto-update is disabled by default in packaged builds until Deno Desktop `latest.json` manifests and binary patch files are published with releases. The first public release currently includes full downloadable app archives, but not update patch manifests yet.
 
 Deno Desktop currently documents full staged-update support for macOS and Linux. Treat Windows auto-update as limited until the runtime supports swapping all loaded Windows binaries.
 
@@ -154,6 +170,8 @@ src/desktop-bindings.ts         Narrow renderer-to-desktop HTTP API wrapper
 npm run dev                  # Browser mockup gallery
 npm run desktop:dev          # Real Deno Desktop tray app with HMR
 npm run desktop:package      # Package current target
+npm run desktop:package:mac  # Build signed/notarized macOS ZIPs
+npm run desktop:publish:mac  # Upload notarized macOS ZIPs to GitHub Releases
 npm run desktop:package:all  # Package all supported targets
 npm run typecheck            # TypeScript check
 npm run test:run             # Vitest suite

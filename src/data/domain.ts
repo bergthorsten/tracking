@@ -6,6 +6,8 @@ export type Ticket = {
   project: ProjectKey
   /** Minutes already logged today against this ticket. */
   todayMinutes: number
+  /** Total minutes logged by the current user against this ticket, when known. */
+  trackedMinutes?: number
   /** ISO timestamp of the last worklog against this ticket. */
   lastWorked: string
 }

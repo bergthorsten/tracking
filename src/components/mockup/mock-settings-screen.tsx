@@ -103,7 +103,7 @@ export function MockSettingsScreen({ onBack }: { onBack?: () => void }) {
           </section>
 
           <p className="pt-1 text-center text-[11px] text-muted-foreground">
-            Jira Time Tracker · v0.0.1
+            Jira Time Tracker · v0.0.2
           </p>
         </div>
       </ScrollArea>
