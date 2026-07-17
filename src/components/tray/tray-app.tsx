@@ -21,6 +21,9 @@ type CurrentUser = {
   avatarUrl?: string
 }
 
+/** Quiet background sync — enough to stay current without nagging the tray. */
+const AUTO_REFRESH_INTERVAL_MS = 30 * 60 * 1000
+
 /**
  * The menu-bar popover shell. Fills its window (the DeviceFrame in the mockup
  * gallery sets the fixed 400×600 size). Two views — Track & Worklog — plus the
@@ -36,6 +39,7 @@ export function TrayApp({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const [lastRefreshedAt, setLastRefreshedAt] = React.useState<Date | null>(
     null
   )
+  const refreshingRef = React.useRef(false)
   const desktopBindings = React.useMemo(() => getDesktopBindings(), [])
 
   React.useEffect(() => {
@@ -56,6 +60,55 @@ export function TrayApp({ onOpenSettings }: { onOpenSettings?: () => void }) {
 
     return () => {
       cancelled = true
+    }
+  }, [desktopBindings])
+
+  const refreshJiraData = React.useEffectEvent(
+    async (options?: { silent?: boolean }) => {
+      if (!desktopBindings || refreshingRef.current) {
+        return
+      }
+
+      const silent = options?.silent ?? false
+      refreshingRef.current = true
+      setRefreshing(true)
+
+      try {
+        await desktopBindings.refreshJiraData()
+        setLastRefreshedAt(new Date())
+        React.startTransition(() => {
+          setRefreshKey((key) => key + 1)
+        })
+        if (!silent) {
+          toast.success("Jira data refreshed")
+        }
+      } catch (error) {
+        if (!silent) {
+          toast.error("Could not refresh Jira data", {
+            description:
+              error instanceof Error
+                ? error.message
+                : "Try again in a moment.",
+          })
+        }
+      } finally {
+        refreshingRef.current = false
+        setRefreshing(false)
+      }
+    }
+  )
+
+  React.useEffect(() => {
+    if (!desktopBindings) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshJiraData({ silent: true })
+    }, AUTO_REFRESH_INTERVAL_MS)
+
+    return () => {
+      window.clearInterval(intervalId)
     }
   }, [desktopBindings])
 
@@ -97,30 +150,6 @@ export function TrayApp({ onOpenSettings }: { onOpenSettings?: () => void }) {
       })
     } finally {
       setSubmittingWorklog(false)
-    }
-  }
-
-  const refreshJiraData = async () => {
-    if (!desktopBindings || refreshing) {
-      return
-    }
-
-    setRefreshing(true)
-
-    try {
-      await desktopBindings.refreshJiraData()
-      setLastRefreshedAt(new Date())
-      React.startTransition(() => {
-        setRefreshKey((key) => key + 1)
-      })
-      toast.success("Jira data refreshed")
-    } catch (error) {
-      toast.error("Could not refresh Jira data", {
-        description:
-          error instanceof Error ? error.message : "Try again in a moment.",
-      })
-    } finally {
-      setRefreshing(false)
     }
   }
 
