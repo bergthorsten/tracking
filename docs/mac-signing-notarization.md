@@ -93,6 +93,7 @@ npm run desktop:publish:mac
 - `deno desktop` ad-hoc signing is still used for normal development packaging.
 - `scripts/package-mac.ts` creates a temporary Deno config containing `desktop.macos.codesignIdentity` so the committed `deno.json` does not hard-code a local certificate name.
 - The package script includes and signs Deno Desktop's `libruntime.dylib.update-ok` marker before sealing the app bundle because the runtime expects that file on launch; adding it after signing would invalidate the sealed bundle.
+- Do **not** ship `Deno.autoUpdate()` dylib patches for notarized macOS builds. In-place `libruntime.dylib` replacement invalidates the sealed bundle. The app updates by downloading the full notarized ZIP from GitHub Releases and swapping the `.app` on quit instead.
 - Notarization runs with `xcrun notarytool submit --wait`, then `xcrun stapler staple`.
 - Publishing uses `gh release upload --clobber` when the release already exists.
 - Do not commit Apple credentials, app-specific passwords, GitHub tokens, `.p12` files, or `.env`.

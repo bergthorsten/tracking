@@ -127,15 +127,22 @@ dist-desktop/release/Jira-Tracking-v0.0.2-macos-x64.zip
 
 ## Auto-Update
 
-The app is wired to Deno Desktop auto-update with this release URL:
+Packaged builds poll GitHub Releases hourly and download the full platform archive for the newer version. On macOS and Linux, quitting the app replaces the install with the staged build and relaunches (macOS).
+
+This intentionally does **not** use [`Deno.autoUpdate()`](https://docs.deno.com/runtime/desktop/auto_update/) on signed macOS builds. That API applies a `bsdiff` patch to `libruntime.dylib` inside the `.app` bundle, which breaks the Developer ID / notarization seal Gatekeeper expects. Full ZIP replacement keeps the notarized signature intact.
+
+Release URL / assets:
 
 ```txt
-https://github.com/bergthorsten/tracking/releases/latest/download
+https://github.com/bergthorsten/tracking/releases/latest
+Jira-Tracking-v<version>-macos-arm64.zip
+Jira-Tracking-v<version>-macos-x64.zip
+Jira-Tracking-v<version>-windows-x64.zip
+Jira-Tracking-v<version>-linux-x64.tar.gz
+Jira-Tracking-v<version>-linux-arm64.tar.gz
 ```
 
-Auto-update is disabled by default in packaged builds until Deno Desktop `latest.json` manifests and binary patch files are published with releases. The first public release currently includes full downloadable app archives, but not update patch manifests yet.
-
-Deno Desktop currently documents full staged-update support for macOS and Linux. Treat Windows auto-update as limited until the runtime supports swapping all loaded Windows binaries.
+Windows can stage a download but does not auto-replace the install directory yet. Dev runs keep `--disable-auto-update`.
 
 ## Desktop Permissions
 

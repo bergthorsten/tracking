@@ -15,6 +15,7 @@ import {
 } from "../src/domain/app-settings.ts"
 import { normalizeJiraHost } from "../src/domain/jira.ts"
 import { nextReminderDate, weekdayForDate } from "../src/domain/reminders.ts"
+import { createAutoUpdater } from "./auto-update.ts"
 import { createJiraClient } from "./jira/client.ts"
 import { JiraDataCache } from "./jira/data-cache.ts"
 import {
@@ -36,7 +37,6 @@ const APP_IDENTIFIER = "de.bergfreunde.jira-tracking"
 const SHOW_PANEL_ON_START =
   Deno.build.os === "windows" || Deno.args.includes("--show-panel")
 const DISABLE_AUTO_UPDATE = Deno.args.includes("--disable-auto-update")
-const ENABLE_AUTO_UPDATE = Deno.args.includes("--enable-auto-update")
 
 const distRoot = new URL("../dist/", import.meta.url)
 const appIcon = await Deno.readFile(new URL("logo.png", distRoot))
@@ -782,7 +782,9 @@ tray.setTooltip("Jira-Tracking")
 console.log(`[desktop] tray id: ${tray.trayId}`)
 
 function notifyUpdateReady(version: string) {
-  console.log(`[desktop] update ready: ${version}; it will apply after restart`)
+  console.log(
+    `[desktop] update ready: ${version}; quit the app to install the notarized build`
+  )
 
   if (
     typeof Notification === "undefined" ||
@@ -792,7 +794,7 @@ function notifyUpdateReady(version: string) {
   }
 
   const notification = new Notification("Jira-Tracking update ready", {
-    body: `Version ${version} will install after restarting the app.`,
+    body: `Version ${version} is downloaded. Quit the app to install it.`,
     icon: appIconDataUrl,
     tag: "jira-tracking-update-ready",
   })
@@ -800,14 +802,21 @@ function notifyUpdateReady(version: string) {
   notification.addEventListener("click", () => showPanelWindow())
 }
 
+const autoUpdater =
+  !DISABLE_AUTO_UPDATE && Deno.desktopVersion !== null
+    ? createAutoUpdater({
+        currentVersion: Deno.desktopVersion,
+        settingsDir,
+        onUpdateReady: notifyUpdateReady,
+        onError(error) {
+          console.warn("[desktop] auto-update check failed", error)
+        },
+      })
+    : null
+
 function startAutoUpdate() {
   if (DISABLE_AUTO_UPDATE) {
     console.log("[desktop] auto-update disabled by startup flag")
-    return
-  }
-
-  if (!ENABLE_AUTO_UPDATE) {
-    console.log("[desktop] auto-update disabled; no release manifest is published")
     return
   }
 
@@ -818,18 +827,30 @@ function startAutoUpdate() {
     return
   }
 
-  Deno.autoUpdate({
-    interval: 60 * 60 * 1000,
-    onUpdateReady(version) {
-      notifyUpdateReady(version)
-    },
-    onRollback(reason) {
-      console.warn("[desktop] update rolled back", reason)
-    },
-  })
+  if (!autoUpdater) {
+    return
+  }
+
+  // Full notarized archive replacement — Deno.autoUpdate patches libruntime.dylib
+  // in-place and would invalidate Developer ID / Gatekeeper seals on macOS.
+  // See https://docs.deno.com/runtime/desktop/auto_update/
+  console.log(
+    `[desktop] auto-update enabled for ${Deno.desktopVersion} via GitHub Releases`
+  )
+  void autoUpdater.start()
 }
 
 let isQuitting = false
+
+function quitApp() {
+  isQuitting = true
+
+  if (autoUpdater?.hasStagedUpdate()) {
+    autoUpdater.applyStagedUpdateAndExit()
+  }
+
+  Deno.exit(0)
+}
 
 tray.setMenu([
   { item: { label: "Show / Hide", id: "toggle", enabled: true } },
@@ -850,8 +871,7 @@ tray.addEventListener("menuclick", (event) => {
   }
 
   if (event.detail.id === "quit") {
-    isQuitting = true
-    Deno.exit(0)
+    quitApp()
   }
 })
 
@@ -954,6 +974,7 @@ startAutoUpdate()
 // Keep native desktop objects strongly referenced across HMR/module cleanup.
 Object.assign(globalThis, {
   __jiraTrackingDesktop: {
+    autoUpdater,
     keepAlive,
     keeperWindow,
     panelWindow,

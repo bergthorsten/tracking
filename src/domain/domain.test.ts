@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  findReleaseAsset,
+  isNewerVersion,
+  macAppBundlePathFromExecPath,
+  normalizeReleaseVersion,
+  platformLabelFor,
+  releaseAssetName,
+} from "./auto-update"
+import {
   defaultAppSettings,
   defaultReminderDays,
   normalizeAppSettings,
@@ -399,5 +407,54 @@ describe("initialsFromName", () => {
     expect(initialsFromName("  Grace   Hopper  ")).toBe("GH")
     expect(initialsFromName("user@example.com")).toBe("US")
     expect(initialsFromName("   ")).toBe("?")
+  })
+})
+
+describe("auto-update helpers", () => {
+  it("normalizes release tags and compares semver", () => {
+    expect(normalizeReleaseVersion("v0.0.3")).toBe("0.0.3")
+    expect(normalizeReleaseVersion("0.0.3")).toBe("0.0.3")
+    expect(isNewerVersion("0.0.3", "0.0.2")).toBe(true)
+    expect(isNewerVersion("0.0.2", "0.0.2")).toBe(false)
+    expect(isNewerVersion("0.1.0", "0.0.9")).toBe(true)
+    expect(isNewerVersion("0.0.2", "0.0.3")).toBe(false)
+  })
+
+  it("maps platform labels and release asset names", () => {
+    expect(platformLabelFor("darwin", "aarch64")).toBe("macos-arm64")
+    expect(platformLabelFor("darwin", "x86_64")).toBe("macos-x64")
+    expect(platformLabelFor("linux", "x86_64")).toBe("linux-x64")
+    expect(platformLabelFor("windows", "x86_64")).toBe("windows-x64")
+    expect(platformLabelFor("freebsd", "x86_64")).toBeNull()
+
+    expect(releaseAssetName("0.0.3", "macos-arm64")).toBe(
+      "Jira-Tracking-v0.0.3-macos-arm64.zip"
+    )
+    expect(releaseAssetName("0.0.3", "linux-x64")).toBe(
+      "Jira-Tracking-v0.0.3-linux-x64.tar.gz"
+    )
+  })
+
+  it("finds matching release assets and mac app bundle paths", () => {
+    const asset = findReleaseAsset(
+      {
+        tag_name: "v0.0.3",
+        assets: [
+          {
+            name: "Jira-Tracking-v0.0.3-macos-arm64.zip",
+            browser_download_url: "https://example.com/arm64.zip",
+          },
+        ],
+      },
+      "macos-arm64"
+    )
+
+    expect(asset?.browser_download_url).toBe("https://example.com/arm64.zip")
+    expect(
+      macAppBundlePathFromExecPath(
+        "/Applications/Jira-Tracking.app/Contents/MacOS/Jira-Tracking"
+      )
+    ).toBe("/Applications/Jira-Tracking.app")
+    expect(macAppBundlePathFromExecPath("/usr/local/bin/jira-tracking")).toBeNull()
   })
 })

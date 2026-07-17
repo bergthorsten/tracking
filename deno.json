@@ -25,9 +25,6 @@
       "macos": "./dist-desktop/Jira-Tracking.app",
       "windows": "./dist-desktop/Jira-Tracking",
       "linux": "./dist-desktop/tracking.AppImage"
-    },
-    "release": {
-      "baseUrl": "https://github.com/bergthorsten/tracking/releases/latest/download"
     }
   }
 }
