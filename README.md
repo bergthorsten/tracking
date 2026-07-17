@@ -146,7 +146,7 @@ Windows can stage a download but does not auto-replace the install directory yet
 
 ## Desktop Permissions
 
-The desktop tasks keep `--allow-env` scoped to variables needed for app-data discovery and Deno Desktop's runtime serve address. `--allow-read`, `--allow-write`, and `--allow-net` remain broad because Jira hosts are user-configurable, Deno Desktop chooses the loopback port at runtime, bundled assets are served from `dist`, and settings are stored in platform-specific app-data folders. Do not add broader permissions unless a new native feature requires them.
+The desktop tasks keep `--allow-env` scoped to variables needed for app-data discovery and Deno Desktop's runtime serve address. `--allow-read`, `--allow-write`, `--allow-net`, and `--allow-run` remain in place because Jira hosts are user-configurable, Deno Desktop chooses the loopback port at runtime, bundled assets are served from `dist`, settings are stored in platform-specific app-data folders, and notification settings can open the OS settings app. Do not add broader permissions unless a new native feature requires them.
 
 ## Project Structure
 

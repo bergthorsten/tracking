@@ -46,8 +46,21 @@ export function SettingsScreen({
   const [appSettings, setAppSettings] =
     React.useState<PublicAppSettings | null>(null)
   const [saving, setSaving] = React.useState(false)
+  const [testingNotification, setTestingNotification] = React.useState(false)
   const [disconnecting, setDisconnecting] = React.useState(false)
   const settingsSaveVersion = React.useRef(0)
+
+  const reloadAppSettings = async () => {
+    const desktopBindings = getDesktopBindings()
+
+    if (!desktopBindings) {
+      return
+    }
+
+    const settings = await desktopBindings.loadAppSettings()
+    setAppSettings(settings)
+    return settings
+  }
 
   React.useEffect(() => {
     let cancelled = false
@@ -72,8 +85,25 @@ export function SettingsScreen({
       }
     })
 
+    const refreshOnFocus = () => {
+      if (document.visibilityState !== "visible") {
+        return
+      }
+
+      void desktopBindings.loadAppSettings().then((settings) => {
+        if (!cancelled) {
+          setAppSettings(settings)
+        }
+      })
+    }
+
+    window.addEventListener("focus", refreshOnFocus)
+    document.addEventListener("visibilitychange", refreshOnFocus)
+
     return () => {
       cancelled = true
+      window.removeEventListener("focus", refreshOnFocus)
+      document.removeEventListener("visibilitychange", refreshOnFocus)
     }
   }, [])
 
@@ -120,16 +150,14 @@ export function SettingsScreen({
 
       try {
         const status = await desktopBindings.requestNotificationPermission()
+        await reloadAppSettings()
 
-        if (status.permission !== "granted") {
+        if (!status.enabled) {
           toast.error("Notifications are not enabled", {
             description:
               status.message || "Allow notifications in system settings.",
           })
-          return
         }
-
-        updateAppSettings({ notificationsEnabled: true })
       } catch (error) {
         toast.error("Notifications are not enabled", {
           description: error instanceof Error ? error.message : String(error),
@@ -141,6 +169,64 @@ export function SettingsScreen({
     }
 
     updateAppSettings({ notificationsEnabled: false })
+  }
+
+  const sendTestNotification = async () => {
+    const desktopBindings = getDesktopBindings()
+
+    if (!desktopBindings) {
+      return
+    }
+
+    setTestingNotification(true)
+
+    try {
+      await desktopBindings.sendTestNotification()
+      toast.success("Test notification sent")
+    } catch (error) {
+      toast.error("Test notification failed", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+      await reloadAppSettings().catch(() => {
+        // Keep the current settings if refresh fails.
+      })
+    } finally {
+      setTestingNotification(false)
+    }
+  }
+
+  const openNotificationSystemSettings = async () => {
+    const desktopBindings = getDesktopBindings()
+
+    if (!desktopBindings) {
+      return
+    }
+
+    try {
+      await desktopBindings.openNotificationSettings()
+      toast.message("Allow notifications for Jira-Tracking", {
+        description: "Then come back and tap Check again.",
+      })
+    } catch (error) {
+      toast.error("Could not open system settings", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  const refreshNotificationStatus = async () => {
+    setSaving(true)
+
+    try {
+      await reloadAppSettings()
+      toast.success("Notification status updated")
+    } catch (error) {
+      toast.error("Could not refresh notification status", {
+        description: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
   const toggleLaunchAtLogin = async (enabled: boolean) => {
@@ -237,6 +323,7 @@ export function SettingsScreen({
                 reminders={appSettings.reminders}
                 notificationStatus={appSettings.native.notifications}
                 saving={saving}
+                testing={testingNotification}
                 onToggleNotifications={toggleNotifications}
                 onToggleReminders={(remindersEnabled) =>
                   updateAppSettings({ remindersEnabled })
@@ -244,6 +331,9 @@ export function SettingsScreen({
                 onChangeReminders={(reminders: AppReminder[]) =>
                   updateAppSettings({ reminders })
                 }
+                onSendTest={sendTestNotification}
+                onOpenSystemSettings={openNotificationSystemSettings}
+                onRefreshStatus={refreshNotificationStatus}
               />
             ) : (
               <ConnectionSkeleton />

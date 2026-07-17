@@ -1,4 +1,4 @@
-import { Bell, Plus, Trash2 } from "lucide-react"
+import { Bell, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,28 +17,42 @@ export function NotificationSettings({
   reminders,
   notificationStatus,
   saving,
+  testing,
   onToggleNotifications,
   onToggleReminders,
   onChangeReminders,
+  onSendTest,
+  onOpenSystemSettings,
+  onRefreshStatus,
 }: {
   enabled: boolean
   remindersEnabled: boolean
   reminders: AppReminder[]
   notificationStatus?: FeatureStatus
   saving?: boolean
+  testing?: boolean
   onToggleNotifications: (enabled: boolean) => void
   onToggleReminders: (enabled: boolean) => void
   onChangeReminders: (reminders: AppReminder[]) => void
+  onSendTest?: () => void
+  onOpenSystemSettings?: () => void
+  onRefreshStatus?: () => void
 }) {
   const supported = notificationStatus?.supported !== false
-  const active = enabled && supported
+  const permission = notificationStatus?.permission
+  const denied = permission === "denied"
+  const granted = permission === "granted"
+  const active = enabled && supported && !denied
   const controlsEnabled = active && remindersEnabled
+  const busy = saving || testing
   const subtitle = !supported
     ? notificationStatus?.message || "Native notifications are unavailable"
-    : notificationStatus?.permission === "denied"
-      ? "Notifications are denied in system settings"
+    : denied
+      ? notificationStatus?.message ||
+        "Notifications are blocked in system settings"
       : enabled
-        ? "Native notifications are enabled"
+        ? notificationStatus?.message ||
+          "Reminders fire while the app is running"
         : "Enable native notifications for reminders"
 
   const updateReminder = (id: string, next: Partial<AppReminder>) => {
@@ -72,29 +86,73 @@ export function NotificationSettings({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {notificationStatus?.permission ? (
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-              {notificationStatus.permission}
+          {permission ? (
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                denied
+                  ? "bg-destructive/15 text-destructive"
+                  : granted
+                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                    : "bg-muted text-muted-foreground"
+              )}
+            >
+              {permission}
             </span>
           ) : null}
           <Switch
-            checked={enabled}
-            disabled={!supported || saving}
+            checked={enabled && !denied}
+            disabled={!supported || busy || denied}
             onCheckedChange={onToggleNotifications}
           />
         </div>
       </div>
 
+      {supported && (denied || onSendTest || onOpenSystemSettings) ? (
+        <div className="flex flex-wrap gap-1.5">
+          {denied || permission === "default" ? (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={busy || !onOpenSystemSettings}
+              onClick={onOpenSystemSettings}
+            >
+              <ExternalLink /> Open system settings
+            </Button>
+          ) : null}
+          {denied || permission === "default" ? (
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={busy || !onRefreshStatus}
+              onClick={onRefreshStatus}
+            >
+              <RefreshCw /> Check again
+            </Button>
+          ) : null}
+          {granted && enabled && onSendTest ? (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={busy}
+              onClick={onSendTest}
+            >
+              <Bell /> Send test
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between rounded-lg border bg-card/40 p-2.5">
         <div>
           <p className="text-sm font-medium">Scheduled reminders</p>
           <p className="text-xs text-muted-foreground">
-            Fire at selected local times
+            Fire at selected local times while the app is running
           </p>
         </div>
         <Switch
           checked={remindersEnabled}
-          disabled={!active || saving}
+          disabled={!active || busy}
           onCheckedChange={onToggleReminders}
         />
       </div>
@@ -174,7 +232,7 @@ export function NotificationSettings({
         <Button
           size="xs"
           variant="outline"
-          disabled={!controlsEnabled || saving || reminders.length >= 8}
+          disabled={!controlsEnabled || busy || reminders.length >= 8}
           onClick={addReminder}
           className="self-start"
         >

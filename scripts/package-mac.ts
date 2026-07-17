@@ -224,6 +224,7 @@ try {
       "--allow-read",
       "--allow-write",
       "--allow-net",
+      "--allow-run",
       "--include",
       "dist",
       "--exclude",
