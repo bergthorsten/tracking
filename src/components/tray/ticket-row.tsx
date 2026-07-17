@@ -7,8 +7,12 @@ import { cn } from "@/lib/utils"
 /**
  * A single ticket line. Uniform two-line rhythm keeps the list calm:
  *   line 1 — the title (primary, scannable)
- *   line 2 — colored key · tracked time · last worked
+ *   line 2 — colored key · last activity (quiet) · tracked duration (metric)
  * The trailing "+" opens the dedicated log-time sheet.
+ *
+ * Duration and recency are different kinds of time: recency stays muted prose
+ * next to the key; duration sits as a trailing tabular metric — like Apple
+ * Mail's date column or Music's track length.
  */
 export function TicketRow({
   ticket,
@@ -22,8 +26,16 @@ export function TicketRow({
   className?: string
 }) {
   const meta = projectMetaFor(ticket.project)
+  const trackedMinutes = ticket.trackedMinutes ?? 0
   const jiraUrl = jiraHost
     ? `https://${jiraHost}/browse/${encodeURIComponent(ticket.key)}`
+    : undefined
+  const durationLabel =
+    trackedMinutes > 0 ? formatDuration(trackedMinutes) : null
+  const durationTitle = durationLabel
+    ? ticket.todayMinutes > 0
+      ? `${durationLabel} logged · ${formatDuration(ticket.todayMinutes)} today`
+      : `${durationLabel} logged on this ticket`
     : undefined
 
   return (
@@ -44,7 +56,7 @@ export function TicketRow({
     >
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-sm font-medium">{ticket.title}</span>
-        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
           {jiraUrl ? (
             <a
               href={jiraUrl}
@@ -63,25 +75,22 @@ export function TicketRow({
               {ticket.key}
             </span>
           )}
-          {(ticket.trackedMinutes ?? 0) > 0 ? (
-            <>
-              <Sep />
-              <span
-                className="font-medium text-foreground/70"
-                title={
-                  ticket.todayMinutes > 0
-                    ? `${formatDuration(ticket.todayMinutes)} logged today`
-                    : undefined
-                }
-              >
-                {formatDuration(ticket.trackedMinutes ?? 0)} tracked
-              </span>
-            </>
-          ) : null}
           <Sep />
-          <span className="truncate">{relativeTime(ticket.lastWorked)}</span>
+          <span className="min-w-0 truncate opacity-80">
+            {relativeTime(ticket.lastWorked)}
+          </span>
         </span>
       </div>
+
+      {durationLabel ? (
+        <span
+          className="shrink-0 tabular-nums text-[11px] font-medium tracking-tight text-foreground/75"
+          title={durationTitle}
+          aria-label={`${durationLabel} tracked`}
+        >
+          {durationLabel}
+        </span>
+      ) : null}
 
       <span
         aria-hidden
