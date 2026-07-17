@@ -220,7 +220,7 @@ try {
       target,
       "--output",
       appPath,
-      "--allow-env=HOME,USERPROFILE,APPDATA,LOCALAPPDATA,XDG_CONFIG_HOME,DENO_SERVE_ADDRESS",
+      "--allow-env=HOME,USERPROFILE,APPDATA,LOCALAPPDATA,XDG_CONFIG_HOME,DENO_SERVE_ADDRESS,DENO_DESKTOP_HMR",
       "--allow-read",
       "--allow-write",
       "--allow-net",

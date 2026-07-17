@@ -24,6 +24,11 @@ import {
   publicJiraSettings,
   type StoredJiraSettings,
 } from "./jira/repository.ts"
+import {
+  getLaunchAtLoginStatus,
+  setLaunchAtLogin,
+  syncLaunchAtLoginRegistration,
+} from "./launch-at-login.ts"
 import { errorMessage, jsonResponse } from "./server/responses.ts"
 import { createRouteHandler } from "./server/routes.ts"
 import { serveStaticApp } from "./server/serve-app.ts"
@@ -250,123 +255,13 @@ async function saveAppSettings(value: unknown) {
   return loadAppSettings()
 }
 
-function startupFilePath() {
-  const home = Deno.env.get("HOME") ?? Deno.env.get("USERPROFILE")
-
-  if (Deno.build.os === "darwin") {
-    if (!home) {
-      throw new Error("Could not find your home directory.")
-    }
-
-    return `${home}/Library/LaunchAgents/${APP_IDENTIFIER}.plist`
-  }
-
-  if (Deno.build.os === "windows") {
-    const appData = Deno.env.get("APPDATA")
-
-    if (!appData) {
-      throw new Error("Could not find the Windows Startup folder.")
-    }
-
-    return `${appData}\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\${APP_NAME}.cmd`
-  }
-
-  if (Deno.build.os === "linux") {
-    if (!home) {
-      throw new Error("Could not find your home directory.")
-    }
-
-    const configHome = Deno.env.get("XDG_CONFIG_HOME") ?? `${home}/.config`
-
-    return `${configHome}/autostart/${APP_IDENTIFIER}.desktop`
-  }
-
-  return null
-}
-
-function escapeXml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-}
-
-function quoteLinuxExec(value: string) {
-  return '"' + value.replace(/(["\\$`])/g, "\\$1") + '"'
-}
-
-async function getLaunchAtLoginStatus(): Promise<FeatureStatus> {
-  const path = startupFilePath()
-
-  if (!path) {
-    return {
-      supported: false,
-      enabled: false,
-      message: "Launch at login is not supported on this platform.",
-    }
-  }
-
-  try {
-    await Deno.stat(path)
-
-    return { supported: true, enabled: true }
-  } catch (error) {
-    if (error instanceof Deno.errors.NotFound) {
-      return { supported: true, enabled: false }
-    }
-
-    throw error
-  }
-}
-
-async function setLaunchAtLogin(enabled: unknown): Promise<FeatureStatus> {
-  if (typeof enabled !== "boolean") {
-    throw new TypeError("Choose whether to launch at login.")
-  }
-
-  const path = startupFilePath()
-
-  if (!path) {
-    throw new Error("Launch at login is not supported on this platform.")
-  }
-
-  if (!enabled) {
-    try {
-      await Deno.remove(path)
-    } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) {
-        throw error
-      }
-    }
-  } else if (Deno.build.os === "darwin") {
-    await Deno.mkdir(path.slice(0, path.lastIndexOf("/")), { recursive: true })
-    await Deno.writeTextFile(
-      path,
-      `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n  <key>Label</key>\n  <string>${APP_IDENTIFIER}</string>\n  <key>ProgramArguments</key>\n  <array>\n    <string>${escapeXml(Deno.execPath())}</string>\n  </array>\n  <key>RunAtLoad</key>\n  <true/>\n</dict>\n</plist>\n`
-    )
-  } else if (Deno.build.os === "windows") {
-    await Deno.mkdir(path.slice(0, path.lastIndexOf("\\")), { recursive: true })
-    await Deno.writeTextFile(
-      path,
-      `@echo off\r\nstart "" "${Deno.execPath().replace(/"/g, '""')}"\r\n`
-    )
-  } else {
-    await Deno.mkdir(path.slice(0, path.lastIndexOf("/")), { recursive: true })
-    await Deno.writeTextFile(
-      path,
-      `[Desktop Entry]\nType=Application\nName=${APP_NAME}\nExec=${quoteLinuxExec(Deno.execPath())}\nX-GNOME-Autostart-enabled=true\nNoDisplay=false\nTerminal=false\n`
-    )
-  }
-
+async function persistLaunchAtLoginPreference(enabled: boolean) {
   const settings = await readStoredAppSettings()
   await saveStoredAppSettings({
     ...settings,
     launchAtLogin: enabled,
     updatedAt: new Date().toISOString(),
   })
-
-  return getLaunchAtLoginStatus()
 }
 
 type NotificationPermissionState =
@@ -808,8 +703,13 @@ async function handleLaunchAtLoginApi(request: Request) {
 
   try {
     const enabled = isRecord(input) ? input.enabled : undefined
+    const status = await setLaunchAtLogin(enabled)
 
-    return jsonResponse(await setLaunchAtLogin(enabled))
+    if (typeof enabled === "boolean") {
+      await persistLaunchAtLoginPreference(enabled)
+    }
+
+    return jsonResponse(status)
   } catch (error) {
     return jsonResponse({ message: errorMessage(error) }, { status: 400 })
   }
@@ -1208,7 +1108,30 @@ Deno.dock.addEventListener("reopen", (event) => {
   }
 })
 
-scheduleReminders(await readStoredAppSettings())
+const storedAppSettings = await readStoredAppSettings()
+scheduleReminders(storedAppSettings)
+
+try {
+  const launchStatus = await syncLaunchAtLoginRegistration({
+    preferEnabled: storedAppSettings.launchAtLogin,
+  })
+
+  if (
+    storedAppSettings.launchAtLogin !== (launchStatus.enabled === true) &&
+    launchStatus.supported
+  ) {
+    await persistLaunchAtLoginPreference(launchStatus.enabled === true)
+  }
+
+  if (!launchStatus.supported && storedAppSettings.launchAtLogin) {
+    console.log(
+      `[desktop] launch at login unavailable: ${launchStatus.message ?? "unsupported"}`
+    )
+  }
+} catch (error) {
+  console.warn("[desktop] launch at login sync failed", error)
+}
+
 startAutoUpdate()
 
 // Keep native desktop objects strongly referenced across HMR/module cleanup.
