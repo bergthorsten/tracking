@@ -67,6 +67,8 @@ export interface CreateJiraWorklogInput {
 
 export type DesktopNotificationPermission = "default" | "denied" | "granted"
 
+export type NotificationAction = "request" | "test" | "open-settings"
+
 export interface FeatureStatus {
   supported: boolean
   enabled?: boolean

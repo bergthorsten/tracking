@@ -7,6 +7,7 @@ import {
   type JiraTicket,
   type JiraWorklog,
   type JiraWorklogResult,
+  type NotificationAction,
   type PublicAppSettings,
   type SavedJiraSettings,
 } from "./contracts/desktop-api"
@@ -20,6 +21,7 @@ export type {
   JiraTicket,
   JiraWorklog,
   JiraWorklogResult,
+  NotificationAction,
   PublicAppSettings,
   SavedJiraSettings,
 } from "./contracts/desktop-api"
@@ -34,6 +36,8 @@ export interface DesktopBindings {
   setLaunchAtLogin(enabled: boolean): Promise<FeatureStatus>
   getNotificationStatus(): Promise<FeatureStatus>
   requestNotificationPermission(): Promise<FeatureStatus>
+  sendTestNotification(): Promise<FeatureStatus>
+  openNotificationSettings(): Promise<FeatureStatus>
   loadJiraProfile(): Promise<SavedJiraSettings>
   loadJiraIssues(query?: string): Promise<JiraTicket[]>
   loadJiraWorklogs(month?: string): Promise<JiraWorklogResult>
@@ -80,7 +84,9 @@ const httpDesktopBindings: DesktopBindings = {
   getNotificationStatus: () =>
     requestDesktop<FeatureStatus>(notificationsEndpoint),
   requestNotificationPermission: () =>
-    requestDesktop<FeatureStatus>(notificationsEndpoint, { method: "POST" }),
+    postNotificationAction("request"),
+  sendTestNotification: () => postNotificationAction("test"),
+  openNotificationSettings: () => postNotificationAction("open-settings"),
   loadJiraProfile: () => requestDesktop<SavedJiraSettings>(jiraProfileEndpoint),
   loadJiraIssues: (query) => {
     const params = new URLSearchParams()
@@ -138,6 +144,14 @@ async function requestDesktop<T>(
   }
 
   return body as T
+}
+
+function postNotificationAction(action: NotificationAction) {
+  return requestDesktop<FeatureStatus>(notificationsEndpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action }),
+  })
 }
 
 export function getDesktopBindings() {

@@ -230,13 +230,14 @@ async function saveStoredAppSettings(settings: StoredAppSettings) {
 }
 
 async function loadAppSettings(): Promise<PublicAppSettings> {
+  const notifications = await getNotificationStatus()
   const settings = await readStoredAppSettings()
 
   return {
     ...settings,
     native: {
       launchAtLogin: await getLaunchAtLoginStatus(),
-      notifications: await getNotificationStatus(),
+      notifications,
     },
   }
 }
@@ -368,17 +369,31 @@ async function setLaunchAtLogin(enabled: unknown): Promise<FeatureStatus> {
   return getLaunchAtLoginStatus()
 }
 
-async function getNotificationStatus(): Promise<FeatureStatus> {
-  if (typeof Notification === "undefined") {
-    return {
-      supported: false,
-      enabled: false,
-      permission: "unsupported",
-      message: "Native notifications are only available in Deno Desktop.",
-    }
-  }
+type NotificationPermissionState =
+  | "default"
+  | "denied"
+  | "granted"
+  | "unsupported"
 
-  let permission = Notification.permission
+function notificationStatusMessage(
+  permission: NotificationPermissionState
+): string | undefined {
+  switch (permission) {
+    case "denied":
+      return "Blocked in system settings. Allow notifications for Jira-Tracking, then check again."
+    case "default":
+      return "Permission not granted yet. Enable notifications to request access."
+    case "granted":
+      return "Reminders fire while the app is running."
+    default:
+      return undefined
+  }
+}
+
+async function queryNotificationPermission(): Promise<NotificationPermissionState> {
+  if (typeof Notification === "undefined") {
+    return "unsupported"
+  }
 
   try {
     const permissions = navigator.permissions as {
@@ -387,15 +402,104 @@ async function getNotificationStatus(): Promise<FeatureStatus> {
       }>
     }
     const status = await permissions.query({ name: "notifications" })
-    permission = status.state === "prompt" ? "default" : status.state
+    return status.state === "prompt" ? "default" : status.state
   } catch {
     // Some backends report permission only through Notification.permission.
+    return Notification.permission
   }
+}
+
+async function syncNotificationsEnabledWithPermission(
+  permission: NotificationPermissionState
+) {
+  if (permission !== "denied") {
+    return
+  }
+
+  const settings = await readStoredAppSettings()
+
+  if (!settings.notificationsEnabled) {
+    return
+  }
+
+  await saveStoredAppSettings({
+    ...settings,
+    notificationsEnabled: false,
+    updatedAt: new Date().toISOString(),
+  })
+}
+
+async function getNotificationStatus(): Promise<FeatureStatus> {
+  const permission = await queryNotificationPermission()
+
+  if (permission === "unsupported") {
+    return {
+      supported: false,
+      enabled: false,
+      permission: "unsupported",
+      message: "Native notifications are only available in Deno Desktop.",
+    }
+  }
+
+  await syncNotificationsEnabledWithPermission(permission)
 
   return {
     supported: true,
     enabled: permission === "granted",
     permission,
+    message: notificationStatusMessage(permission),
+  }
+}
+
+async function showDesktopNotification(
+  title: string,
+  options: NotificationOptions,
+  onClick?: () => void
+): Promise<{ ok: boolean; error?: string }> {
+  const permission = await queryNotificationPermission()
+
+  if (permission === "unsupported") {
+    return { ok: false, error: "Native notifications are unavailable." }
+  }
+
+  if (permission === "denied") {
+    await syncNotificationsEnabledWithPermission(permission)
+    return {
+      ok: false,
+      error: "Notifications are blocked in system settings.",
+    }
+  }
+
+  try {
+    const notification = new Notification(title, options)
+
+    if (onClick) {
+      notification.addEventListener("click", onClick)
+    }
+
+    return await new Promise((resolve) => {
+      let settled = false
+      const finish = (result: { ok: boolean; error?: string }) => {
+        if (settled) {
+          return
+        }
+
+        settled = true
+        resolve(result)
+      }
+
+      notification.addEventListener("show", () => finish({ ok: true }))
+      notification.addEventListener("error", () =>
+        finish({
+          ok: false,
+          error: "The OS could not display the notification.",
+        })
+      )
+      // Some backends never emit show; treat a quiet success as delivered.
+      setTimeout(() => finish({ ok: true }), 750)
+    })
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) }
   }
 }
 
@@ -408,16 +512,120 @@ async function requestNotificationPermission(): Promise<FeatureStatus> {
     await Notification.requestPermission()
   }
 
-  const status = await getNotificationStatus()
-  const settings = await readStoredAppSettings()
+  const permission = await queryNotificationPermission()
 
+  if (permission === "denied" || permission === "unsupported") {
+    await syncNotificationsEnabledWithPermission(permission)
+    return getNotificationStatus()
+  }
+
+  const delivered = await showDesktopNotification(
+    "Notifications enabled",
+    {
+      body: "You'll get reminders while Jira-Tracking is running.",
+      icon: appIconDataUrl,
+      tag: "jira-tracking-notifications-enabled",
+    },
+    () => showPanelWindow()
+  )
+
+  const settings = await readStoredAppSettings()
   await saveStoredAppSettings({
     ...settings,
-    notificationsEnabled: status.permission === "granted",
+    notificationsEnabled: delivered.ok,
     updatedAt: new Date().toISOString(),
   })
 
-  return status
+  if (!delivered.ok) {
+    return {
+      supported: true,
+      enabled: false,
+      permission,
+      message:
+        delivered.error ||
+        "Could not show a notification. Check system notification settings.",
+    }
+  }
+
+  return {
+    supported: true,
+    enabled: true,
+    permission,
+    message: "Notifications are enabled.",
+  }
+}
+
+async function sendTestNotification(): Promise<FeatureStatus> {
+  const status = await getNotificationStatus()
+
+  if (!status.supported || status.permission === "unsupported") {
+    throw new Error("Native notifications are only available in Deno Desktop.")
+  }
+
+  if (status.permission === "denied") {
+    throw new Error(
+      status.message || "Notifications are blocked in system settings."
+    )
+  }
+
+  const delivered = await showDesktopNotification(
+    "Test notification",
+    {
+      body: "If you can read this, reminders can reach you.",
+      icon: appIconDataUrl,
+      tag: "jira-tracking-notification-test",
+    },
+    () => showPanelWindow()
+  )
+
+  if (!delivered.ok) {
+    throw new Error(
+      delivered.error || "The OS could not display the notification."
+    )
+  }
+
+  return {
+    ...status,
+    enabled: true,
+    message: "Test notification sent.",
+  }
+}
+
+async function openNotificationSettings(): Promise<FeatureStatus> {
+  if (Deno.build.os === "darwin") {
+    const targeted =
+      `x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=${APP_IDENTIFIER}`
+    const fallback =
+      "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
+    const first = await new Deno.Command("open", { args: [targeted] }).output()
+
+    if (first.code !== 0) {
+      const second = await new Deno.Command("open", {
+        args: [fallback],
+      }).output()
+
+      if (second.code !== 0) {
+        throw new Error("Could not open macOS notification settings.")
+      }
+    }
+  } else if (Deno.build.os === "windows") {
+    const result = await new Deno.Command("cmd", {
+      args: ["/c", "start", "", "ms-settings:notifications"],
+    }).output()
+
+    if (result.code !== 0) {
+      throw new Error("Could not open Windows notification settings.")
+    }
+  } else {
+    throw new Error(
+      "Open your system notification settings and allow Jira-Tracking."
+    )
+  }
+
+  return {
+    ...(await getNotificationStatus()),
+    message: "Opened system notification settings.",
+  }
 }
 
 function clearReminderTimers() {
@@ -428,21 +636,20 @@ function clearReminderTimers() {
   reminderTimers.clear()
 }
 
-function showReminderNotification(reminder: AppReminder) {
-  if (
-    typeof Notification === "undefined" ||
-    Notification.permission !== "granted"
-  ) {
-    return
+async function showReminderNotification(reminder: AppReminder) {
+  const result = await showDesktopNotification(
+    "Log your Jira time",
+    {
+      body: `Reminder scheduled for ${reminder.time}.`,
+      icon: appIconDataUrl,
+      tag: `jira-tracking-reminder-${reminder.id}`,
+    },
+    () => showPanelWindow()
+  )
+
+  if (!result.ok) {
+    console.warn(`[desktop] reminder notification skipped: ${result.error}`)
   }
-
-  const notification = new Notification("Log your Jira time", {
-    body: `Reminder scheduled for ${reminder.time}.`,
-    icon: appIconDataUrl,
-    tag: `jira-tracking-reminder-${reminder.id}`,
-  })
-
-  notification.addEventListener("click", () => showPanelWindow())
 }
 
 function scheduleReminders(settings: StoredAppSettings) {
@@ -476,10 +683,10 @@ function scheduleReminders(settings: StoredAppSettings) {
         latestReminder?.enabled &&
         latestReminder.days.includes(weekdayForDate(new Date()))
       ) {
-        showReminderNotification(latestReminder)
+        await showReminderNotification(latestReminder)
       }
 
-      scheduleReminders(latest)
+      scheduleReminders(await readStoredAppSettings())
     }, delay)
 
     reminderTimers.set(reminder.id, timer)
@@ -620,8 +827,42 @@ async function handleNotificationsApi(request: Request) {
     )
   }
 
+  let action = "request"
+
   try {
-    return jsonResponse(await requestNotificationPermission())
+    const text = await request.text()
+
+    if (text.trim()) {
+      const body = JSON.parse(text) as unknown
+
+      if (isRecord(body) && typeof body.action === "string" && body.action) {
+        action = body.action
+      }
+    }
+  } catch {
+    return jsonResponse(
+      { message: "Invalid notification request." },
+      { status: 400 }
+    )
+  }
+
+  try {
+    if (action === "request") {
+      return jsonResponse(await requestNotificationPermission())
+    }
+
+    if (action === "test") {
+      return jsonResponse(await sendTestNotification())
+    }
+
+    if (action === "open-settings") {
+      return jsonResponse(await openNotificationSettings())
+    }
+
+    return jsonResponse(
+      { message: "Unknown notification action." },
+      { status: 400 }
+    )
   } catch (error) {
     return jsonResponse({ message: errorMessage(error) }, { status: 400 })
   }
@@ -786,20 +1027,19 @@ function notifyUpdateReady(version: string) {
     `[desktop] update ready: ${version}; quit the app to install the notarized build`
   )
 
-  if (
-    typeof Notification === "undefined" ||
-    Notification.permission !== "granted"
-  ) {
-    return
-  }
-
-  const notification = new Notification("Jira-Tracking update ready", {
-    body: `Version ${version} is downloaded. Quit the app to install it.`,
-    icon: appIconDataUrl,
-    tag: "jira-tracking-update-ready",
+  void showDesktopNotification(
+    "Jira-Tracking update ready",
+    {
+      body: `Version ${version} is downloaded. Quit the app to install it.`,
+      icon: appIconDataUrl,
+      tag: "jira-tracking-update-ready",
+    },
+    () => showPanelWindow()
+  ).then((result) => {
+    if (!result.ok) {
+      console.warn(`[desktop] update notification skipped: ${result.error}`)
+    }
   })
-
-  notification.addEventListener("click", () => showPanelWindow())
 }
 
 const autoUpdater =
