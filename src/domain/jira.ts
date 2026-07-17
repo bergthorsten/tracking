@@ -1,5 +1,19 @@
 const EXACT_ISSUE_KEY_PATTERN = /^[A-Z][A-Z0-9]+-\d+$/
 
+/** Default Atlassian site prefilled in onboarding (host only; UI shows https://). */
+export const DEFAULT_JIRA_HOST = "jirabergfreunde.atlassian.net"
+
+/**
+ * Soft input cleanup for the host field: strips a pasted scheme and trailing
+ * slashes so the value matches the https:// prefix already shown in the UI.
+ */
+export function formatJiraHostInput(value: string) {
+  return value
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/+$/, "")
+}
+
 export function normalizeJiraHost(value: unknown) {
   if (typeof value !== "string") {
     throw new TypeError("Enter a Jira site.")

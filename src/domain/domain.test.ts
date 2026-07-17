@@ -18,6 +18,7 @@ import {
   type AppReminder,
 } from "./app-settings"
 import {
+  formatJiraHostInput,
   isExactJiraIssueKey,
   isJiraKeySearch,
   normalizeJiraHost,
@@ -291,6 +292,23 @@ describe("normalizeAppSettings", () => {
     expect(
       parseStoredAppSettings({ ...defaultAppSettings, updatedAt })?.updatedAt
     ).toBe(updatedAt)
+  })
+})
+
+describe("formatJiraHostInput", () => {
+  it("strips schemes and trailing slashes from pasted URLs", () => {
+    expect(formatJiraHostInput("https://xxxx.atlassian.net")).toBe(
+      "xxxx.atlassian.net"
+    )
+    expect(formatJiraHostInput("https://xxxx.atlassian.net/")).toBe(
+      "xxxx.atlassian.net"
+    )
+    expect(formatJiraHostInput("HTTP://xxxx.atlassian.net///")).toBe(
+      "xxxx.atlassian.net"
+    )
+    expect(formatJiraHostInput("  xxxx.atlassian.net  ")).toBe(
+      "xxxx.atlassian.net"
+    )
   })
 })
 

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { getDesktopBindings, type JiraSettingsInput } from "@/desktop-bindings"
+import { DEFAULT_JIRA_HOST, formatJiraHostInput } from "@/domain/jira"
 import { cn } from "@/lib/utils"
 
 type Status = "idle" | "testing" | "connected"
@@ -25,7 +26,7 @@ type OnboardingScreenProps = {
  * API token — with a single "Connect" action that verifies the credentials.
  */
 export function OnboardingScreen({ onDone, onConnect }: OnboardingScreenProps) {
-  const [host, setHost] = React.useState("stjornborg.atlassian.net")
+  const [host, setHost] = React.useState(DEFAULT_JIRA_HOST)
   const [email, setEmail] = React.useState("")
   const [token, setToken] = React.useState("")
   const [reveal, setReveal] = React.useState(false)
@@ -95,8 +96,12 @@ export function OnboardingScreen({ onDone, onConnect }: OnboardingScreenProps) {
             </span>
             <Input
               value={host}
-              onChange={(e) => setHost(e.target.value)}
+              onChange={(e) => setHost(formatJiraHostInput(e.target.value))}
+              placeholder={DEFAULT_JIRA_HOST}
               className="border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
+              spellCheck={false}
+              autoCapitalize="off"
+              autoCorrect="off"
             />
           </div>
         </Field>
