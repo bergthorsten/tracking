@@ -33,7 +33,8 @@ const APP_NAME = "Jira-Tracking"
 const SETTINGS_FILE = "jira-settings.json"
 const APP_SETTINGS_FILE = "app-settings.json"
 const APP_IDENTIFIER = "de.bergfreunde.jira-tracking"
-const SHOW_PANEL_ON_START = Deno.args.includes("--show-panel")
+const SHOW_PANEL_ON_START =
+  Deno.build.os === "windows" || Deno.args.includes("--show-panel")
 const DISABLE_AUTO_UPDATE = Deno.args.includes("--disable-auto-update")
 const ENABLE_AUTO_UPDATE = Deno.args.includes("--enable-auto-update")
 
@@ -887,7 +888,8 @@ function createPanelWindow() {
   })
 
   window.navigate(localUrl("/panel"))
-  window.addEventListener("close", () => {
+  window.addEventListener("close", (event) => {
+    event.preventDefault()
     if (panelWindow === window) {
       window.hide()
       panelWindowVisible = false

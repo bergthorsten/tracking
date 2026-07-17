@@ -1,6 +1,6 @@
 # Jira-Tracking
 
-A small tray-first desktop app for logging Jira work quickly. Open the menu-bar/tray panel, find a ticket, add time in 15-minute steps, check recent worklogs, and get reminder notifications without opening a full Jira client.
+A small desktop app for logging Jira work quickly. On Windows it opens as a normal application window; on macOS and Linux, open the menu-bar/tray panel. Find a ticket, add time in 15-minute steps, check recent worklogs, and get reminder notifications without opening a full Jira client.
 
 Built with React, TypeScript, Vite, shadcn/ui, Tailwind CSS, and Deno Desktop.
 
@@ -11,7 +11,7 @@ Built with React, TypeScript, Vite, shadcn/ui, Tailwind CSS, and Deno Desktop.
 - One-click time logging with selected local date and optional note.
 - Current-month worklog summary and recent worklog list.
 - Persistent app settings for reminders, notifications, and launch at login.
-- Native tray/menu-bar panel behavior for macOS, Windows, and Linux builds.
+- Native tray/menu-bar access for macOS, Windows, and Linux builds; Windows also opens a standard app window at launch.
 - Packaged releases for macOS x64/arm64, Windows x64, and Linux x64/arm64.
 
 ## Install
@@ -34,7 +34,7 @@ macOS release builds should be Developer ID signed and notarized so Gatekeeper a
 
 ## First Run
 
-1. Open the app from the tray/menu bar.
+1. On Windows, use the app window that opens at launch. On macOS and Linux, open the app from the tray/menu bar.
 2. Enter your Jira Cloud host, account email, and Jira API token.
 3. Create a Jira API token at `https://id.atlassian.com/manage-profile/security/api-tokens` if needed.
 4. Search for a ticket or pick a recent one.
@@ -157,7 +157,7 @@ src/desktop-bindings.ts         Narrow renderer-to-desktop HTTP API wrapper
 
 ## Contributing
 
-- Keep the app tray-first: fast ticket search, quick time logging, recent worklogs, and reminders are the core loop.
+- Keep macOS and Linux tray-first; on Windows, open the normal app window at launch. Fast ticket search, quick time logging, recent worklogs, and reminders are the core loop.
 - Do not expose Jira API tokens to React state, logs, screenshots, local storage, or mock data.
 - Keep the desktop bridge narrow and validated in `desktop/main.ts` and `src/desktop-bindings.ts`.
 - Add Vitest coverage for date/time mapping, Jira payload mapping, cache behavior, settings validation, and reminder scheduling logic.
